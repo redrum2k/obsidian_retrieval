@@ -24,6 +24,29 @@ class Registry:
                 "invalid_registry",
                 "Processing registry must use the configured JSON sources schema.",
             )
+        if self.data.get("schema_version", 1) != 1:
+            raise VaultError(
+                "invalid_registry", "Unsupported registry schema; no migration is automatic."
+            )
+        for collection in ("sources", "generated_files"):
+            rows = self.data.get(collection, [])
+            if not isinstance(rows, list) or any(
+                not isinstance(row, dict) or not isinstance(row.get("path"), str) for row in rows
+            ):
+                raise VaultError("invalid_registry", f"{collection} must contain path records.")
+            if len({row["path"] for row in rows}) != len(rows):
+                raise VaultError(
+                    "invalid_registry", f"Duplicate paths in {collection}; review before writing."
+                )
+            for row in rows:
+                for field in ("outputs", "user_note_sources"):
+                    values = row.get(field, [])
+                    if not isinstance(values, list) or any(not isinstance(v, str) for v in values):
+                        raise VaultError("invalid_registry", f"{field} must be a list of paths.")
+        for field in ("completed_batches", "workspace_setups"):
+            values = self.data.get(field, [])
+            if not isinstance(values, list) or any(not isinstance(v, dict) for v in values):
+                raise VaultError("invalid_registry", f"{field} must be a list of records.")
         self.sources = {s["path"]: s for s in self.data.get("sources", [])}
         self.generated = {s["path"] for s in self.data.get("generated_files", [])}
         for source in self.sources.values():

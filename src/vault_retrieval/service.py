@@ -122,12 +122,7 @@ class Service:
                     "integration_permissions", {}
                 )
                 record = registry.record(path)
-                unknown_grounding = self.config.data.get("require_grounding_for_index", False) and (
-                    role not in {"generated", "structured", "scaffold"}
-                    and path not in self.config.data.get("user_note_paths", [])
-                    and not record.get("user_note_sources")
-                    and path not in self.config.data.get("integration_permissions", {})
-                )
+                unknown_grounding = self.needs_admission(path, role, record)
                 result = {"metadata": {}, "warnings": [], "sections": []}
                 key, status = (
                     None,
@@ -244,6 +239,12 @@ class Service:
                             "UPDATE work SET state='completed' WHERE document_id=? AND revision=?",
                             (ident, revision),
                         )
+                    else:
+                        self.db.execute(
+                            "UPDATE work SET state=? WHERE document_id=? AND revision=? "
+                            "AND proposal_id IS NULL AND state IN ('blocked','pending','awaiting_content')",
+                            (state, ident, revision),
+                        )
                 self.db.execute(
                     "UPDATE work SET state='superseded' WHERE document_id=? AND revision<>? AND state<>'completed'",
                     (ident, revision),
@@ -296,6 +297,15 @@ class Service:
             "last_reconciliation": self.store.meta("last_reconciliation"),
         }
 
+    def needs_admission(self, path, role, record):
+        return self.config.data.get("require_grounding_for_index", False) and (
+            role not in {"generated", "structured", "scaffold"}
+            and not self.config.admitted_input(path)
+            and path not in self.config.data.get("user_note_paths", [])
+            and not record.get("user_note_sources")
+            and path not in self.config.data.get("integration_permissions", {})
+        )
+
     def current(self, doc):
         self.check_policy()
         if not doc or not doc["active"]:
@@ -304,6 +314,10 @@ class Service:
             raise VaultError(
                 "stale_revision", "Extractor version changed; refresh before returning evidence."
             )
+        registry = Registry(self.config)
+        role = self.config.classify(doc["path"])[0]
+        if self.needs_admission(doc["path"], role, registry.record(doc["path"])):
+            raise VaultError("awaiting_grounding", "Input shape needs admission before retrieval.")
         data = self.config.read(doc["path"])
         if digest(data) != doc["hash"]:
             raise VaultError("stale_revision", "Refresh before reading changed evidence.")

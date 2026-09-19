@@ -214,3 +214,58 @@ def test_indexed_backlinks_and_rename_reports_without_repair(env):
     service.refresh()
     assert any(e["reason"] == "dependent_link_needs_review" for e in service.changes())
     assert "[[Study/Raw/Capture.md]]" in note.read_text()
+
+
+def test_new_configured_inputs_are_admitted_without_authorship_permission(env):
+    from conftest import plan_for
+
+    from vault_retrieval.coordinator import Coordinator
+
+    service, _, data = env
+    data["require_grounding_for_index"] = True
+    data["user_note_paths"] = []
+    service.refresh(full=True)
+    assert service.db.execute("SELECT state FROM work").fetchone()[0] == "blocked"
+    data["input_rules"] = [{"pattern": "Study/Raw/*", "formats": [".md"]}]
+    admitted = Service(Config(data))
+    try:
+        admitted.refresh()
+        assert admitted.search("Gaussian")
+        assert admitted.db.execute("SELECT state FROM work").fetchone()[0] == "pending"
+        with pytest.raises(VaultError, match="provenance"):
+            Coordinator(admitted).propose(plan_for(admitted))
+        path = admitted.config.vault / "Study/Raw/Tomorrow.md"
+        path.write_text("# Next capture\nEigenvectors from today.\n")
+        admitted.refresh()
+        assert admitted.search("Eigenvectors")
+        assert admitted.refresh()["extracted"] == 0
+        data["input_rules"] = []
+        with pytest.raises(VaultError, match="admission"):
+            admitted.current(
+                admitted.db.execute(
+                    "SELECT * FROM documents WHERE path=?", ("Study/Raw/Tomorrow.md",)
+                ).fetchone()
+            )
+    finally:
+        admitted.store.close()
+
+
+def test_input_rules_keep_context_exclusions_and_format_boundaries(env):
+    service, _, data = env
+    data["require_grounding_for_index"] = True
+    data["input_rules"] = [{"pattern": "Study/documents/*", "formats": [".md"]}]
+    vault = service.config.vault
+    for name in ["New", "Context", "contract"]:
+        (vault / f"Study/documents/{name}.md").write_text(
+            f"# {name}\nDistinctive {name} content.\n"
+        )
+    (vault / "Study/documents/Other.pdf").write_bytes(b"not admitted for extraction")
+    (vault / data["processing_log"]).write_text(
+        json.dumps({"sources": [{"path": "Study/documents/Context.md", "status": "context_only"}]})
+    )
+    service.refresh(full=True)
+    rows = {r["path"]: r["status"] for r in service.db.execute("SELECT * FROM documents")}
+    assert rows["Study/documents/New.md"] == "ready"
+    assert rows["Study/documents/Context.md"] == "context_only"
+    assert rows["Study/documents/Other.pdf"] == "awaiting_grounding"
+    assert "Study/documents/contract.md" not in rows

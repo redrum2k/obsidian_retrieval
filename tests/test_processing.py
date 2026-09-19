@@ -200,3 +200,153 @@ def test_tampered_approval_and_changed_output_after_interruption(env):
         c.apply(ident, receipt)
     assert target.read_text() == "New human edits after interruption"
     assert not json.loads(service.config.read("Planning/Processing log.json"))["sources"]
+
+
+def test_registry_update_preserves_metadata_and_timestamp_field(env):
+    service, key, _ = env
+    log = service.config.vault / "Planning/Processing log.json"
+    before = json.loads(log.read_text())
+    before["sources"] = [
+        {
+            "path": "Study/Raw/Capture.md",
+            "sha256": "old",
+            "processed_at": "2026-01-01T00:00:00Z",
+            "custom_source": "keep",
+        }
+    ]
+    before["generated_files"] = [
+        {
+            "path": "Study/Notes/Linear systems.md",
+            "custom_output": "keep",
+            "user_note_sources": ["Study/Raw/Capture.md"],
+        }
+    ]
+    log.write_text(json.dumps(before))
+    service.refresh()
+    c = Coordinator(service)
+    ident = c.propose(plan_for(service))["id"]
+    assert json.loads(log.read_text()) == before
+    c.apply(ident, receipt_for(service, key, ident))
+    after = json.loads(log.read_text())
+    assert after["sources"][0]["processed_at"]
+    assert "previous_processed_at" not in after["sources"][0]
+    assert after["sources"][0]["custom_source"] == "keep"
+    assert after["generated_files"][0]["custom_output"] == "keep"
+    assert after["generated_files"][0]["user_note_sources"] == ["Study/Raw/Capture.md"]
+
+
+def test_competing_save_after_final_check_is_preserved(env, monkeypatch):
+    import os
+
+    service, key, _ = env
+    service.refresh()
+    c = Coordinator(service)
+    ident = c.propose(plan_for(service))["id"]
+    log = service.config.vault / "Planning/Processing log.json"
+    original = json.loads(log.read_text())
+    competing = json.dumps({**original, "concurrent_owner_edit": True})
+    rename = os.rename
+
+    def race(src, dst, **kwargs):
+        if src == "Processing log.json":
+            log.write_text(competing)
+        return rename(src, dst, **kwargs)
+
+    monkeypatch.setattr(os, "rename", race)
+    with pytest.raises(VaultError, match="Competing edit"):
+        c.apply(ident, receipt_for(service, key, ident))
+    assert log.read_text() == competing
+    assert not json.loads(log.read_text())["sources"]
+    assert (
+        service.db.execute("SELECT state FROM proposals WHERE id=?", (ident,)).fetchone()[0]
+        == "applying"
+    )
+
+
+def test_save_during_missing_path_window_is_not_overwritten(env, monkeypatch):
+    import os
+
+    from vault_retrieval.writes import recovery_dir
+
+    service, key, _ = env
+    service.refresh()
+    c = Coordinator(service)
+    ident = c.propose(plan_for(service))["id"]
+    body = json.loads(
+        service.db.execute("SELECT body FROM proposals WHERE id=?", (ident,)).fetchone()[0]
+    )
+    log = service.config.vault / "Planning/Processing log.json"
+    original = log.read_bytes()
+    link = os.link
+
+    def race(src, dst, **kwargs):
+        if src == "staged" and dst == "Processing log.json":
+            log.write_text('{"sources": [], "owner_edit": true}')
+        return link(src, dst, **kwargs)
+
+    monkeypatch.setattr(os, "link", race)
+    with pytest.raises(VaultError, match="Destination appeared"):
+        c.apply(ident, receipt_for(service, key, ident))
+    assert json.loads(log.read_text())["owner_edit"]
+    assert (recovery_dir(service.config, body["actions"][-1]) / "captured").read_bytes() == original
+
+
+def test_crash_after_capture_can_resume_without_losing_original(env, monkeypatch):
+    import os
+
+    service, key, _ = env
+    service.refresh()
+    c = Coordinator(service)
+    ident = c.propose(plan_for(service))["id"]
+    receipt = receipt_for(service, key, ident)
+    rename = os.rename
+
+    def crash(src, dst, **kwargs):
+        rename(src, dst, **kwargs)
+        raise RuntimeError("simulated process exit after capture")
+
+    monkeypatch.setattr(os, "rename", crash)
+    with pytest.raises(RuntimeError, match="simulated"):
+        c.apply(ident, receipt)
+    monkeypatch.setattr(os, "rename", rename)
+    assert c.apply(ident, receipt)["state"] == "completed"
+    assert c.run_intake()["pending"] == []
+
+
+def test_crash_after_publication_link_recovers(env, monkeypatch):
+    import os
+
+    service, key, _ = env
+    service.refresh()
+    c = Coordinator(service)
+    ident = c.propose(plan_for(service))["id"]
+    receipt = receipt_for(service, key, ident)
+    link = os.link
+
+    def crash(src, dst, **kwargs):
+        link(src, dst, **kwargs)
+        raise RuntimeError("exit after publication link")
+
+    monkeypatch.setattr(os, "link", crash)
+    with pytest.raises(RuntimeError, match="publication link"):
+        c.apply(ident, receipt)
+    monkeypatch.setattr(os, "link", link)
+    assert c.apply(ident, receipt)["state"] == "completed"
+
+
+def test_invalid_registry_fails_without_modification(env):
+    from vault_retrieval.registry import Registry
+
+    service, _, _ = env
+    log = service.config.vault / "Planning/Processing log.json"
+    for value in [
+        {"schema_version": 2, "sources": []},
+        {"sources": [{"path": "a"}, {"path": "a"}]},
+        {"sources": [{"path": "a", "outputs": "not a list"}]},
+        {"sources": [], "generated_files": [None]},
+    ]:
+        original = json.dumps(value)
+        log.write_text(original)
+        with pytest.raises(VaultError):
+            Registry(service.config)
+        assert log.read_text() == original

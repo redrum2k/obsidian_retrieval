@@ -4,7 +4,7 @@ Local implementation exists; the live MVP is not yet released. Huyen is excluded
 
 ## Verified locally
 
-`uv run pytest -q`: **29 passed**. `uv run ruff check src tests examples` and formatter checks pass. PyMuPDF emits dependency deprecation warnings; they do not fail the tests.
+`uv run pytest -q`: **37 passed**. `uv run ruff check src tests examples` and formatter checks pass. PyMuPDF emits dependency deprecation warnings; they do not fail the tests.
 
 Coverage includes:
 
@@ -45,9 +45,15 @@ These are engineering smoke results only. They do not measure owner-labeled para
 2. **Approval integration:** the existing Codex conversation remains the intended surface, but no trusted conversation-event-to-signature bridge is available in this project. Do not give the agent a signing key or substitute an `approved: true` flag. The public key is unset in the live draft.
 3. **Host integration:** the CLI supports intake and plan submission, but the existing heartbeat has not been modified. Grounded synthesis and user notification belong to that host, not to retrieval. A standalone CLI invocation without a plan returns pending work; it does not invent study notes.
 4. **Essential formats:** Tesseract was found locally; LibreOffice was not. Word/slide text extraction and attachment caching work, but Office rendering/legacy conversion and visual fidelity require a local renderer plus corpus validation. No live scans/slides were opened during this implementation.
-5. **External editing race:** per-tool locking, staged writes, no-follow access, hash checks and recovery prevent tested conflicts. There is no portable atomic compare-and-swap against unrelated Obsidian/editor processes. Resolve or explicitly accept that remaining final-check/replacement race before live writes; no cross-application transaction guarantee is claimed.
-6. **Role ambiguity:** known generated/context-only registry entries are respected. New ungrounded live inputs stay metadata-only pending triage; filename filters cannot establish authorship or prove an ambiguously named document is nonsensitive.
+5. **Concurrent editing:** blind replacement has been replaced with capture/validate/exclusive publication. Competing versions are retained; tested collisions stop the batch. A brief missing-path window, late writes through old editor handles, same-filesystem requirement and unverified sync/power-loss behavior remain. See [write safety and recovery](write-safety.md). No cross-application transaction guarantee is claimed.
+6. **Role ambiguity:** known generated/context-only registry entries are respected. New files matching configured input rules enter extraction/retrieval automatically; unmatched inputs remain metadata-only, and proposal grounding remains separate; filename filters cannot establish authorship or prove an ambiguously named document is nonsensitive.
 7. **Evaluation:** run the PRD's owner-labeled tasks, including held-out paraphrases and complete agent traces, before accepting recall/token/latency targets. Embeddings remain deferred.
 8. **Retention and reports:** pending history/backups are retained indefinitely in private external state. Operational intake state is external; automatic dated Planning proposal/report files and lifecycle attachment moves are not implemented. Those remain with the existing workflow unless an explicit adapter is selected.
 
 `architecture-proposal.md` remains byte-for-byte unchanged (SHA-256 `a3e7f52c1dfce6530f104f9d06147ecb33fee34cb9fe28e330889c9991fd30d0`).
+
+## Follow-up verification and connection
+
+New-input admission regression coverage checks new filenames, unchanged reruns, unblocking existing discoveries, revoking admission, context-only restrictions, format limits, and separation from proposal permission. Live indexing remains disabled.
+
+See [connection and evaluation runbook](connection-and-evaluation.md). Registry review and metadata-preservation fixes are documented in [write safety](write-safety.md), including timestamp semantics and remaining dated-report integration. The old final-check/unconditional-replacement path has been removed; recovery tradeoffs are explicit.

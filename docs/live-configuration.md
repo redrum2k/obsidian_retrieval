@@ -37,7 +37,9 @@ Denied: sensitive professional/legal files; `.obsidian`, Templates, Planning as 
 
 CS study-document access is allowed within project trees; code/infrastructure subtrees still remain excluded. Other marked code projects are excluded in full. Links do not confer access; all symlink and hardlink paths are rejected in this first version.
 
-`require_grounding_for_index` is enabled in the proposed live config. Known context-only and ungrounded readings remain metadata-only. Existing registry provenance and explicitly confirmed user-note paths provide the initial grounding set. New captures without established authorship remain discoverable as `awaiting_grounding`; they require triage/configuration review before being indexed as evidence. Named-source integration exceptions are empty. This conservative initial behavior avoids treating a folder's existence as study permission.
+`input_rules` admit new filenames automatically inside eligible Raw, documents, slides, lectures, assignments, and labs folders for the listed Markdown, PDF, Word, and slide formats. Explicit glossary paths and dated Daily Markdown captures are also admitted. Patterns are case-sensitive vault-relative shell patterns (`*` includes nested paths); they never widen allowed roots or override exclusions. Huyen remains excluded.
+
+Admission allows cached extraction and evidence retrieval, not an authorship claim or permission to generate notes. Known context-only restrictions still win unless a named-source integration permission exists. Generated outputs remain excluded from fresh intake. New unconfigured shapes stay metadata-only under `require_grounding_for_index`; unsupported formats remain excluded. No individual filename update is needed for new files matching existing rules. Proposals still require user-note grounding or named-source authorization, followed by exact-batch approval. Previously blocked inputs become pending after admission and refresh.
 
 ## Before enabling
 

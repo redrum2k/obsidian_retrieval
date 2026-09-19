@@ -63,6 +63,18 @@ class Config:
         if not data["roots"] or not isinstance(data["exclude"], list):
             raise VaultError("invalid_config", "Explicit roots and exclusion list are required.")
         self.roots = list(data["roots"])
+        for rule in data.get("input_rules", []):
+            if (
+                not isinstance(rule, dict)
+                or not isinstance(rule.get("pattern"), str)
+                or not isinstance(rule.get("formats"), list)
+                or not rule["formats"]
+                or any(ext not in FORMATS for ext in rule["formats"])
+            ):
+                raise VaultError(
+                    "invalid_config", "Input rules need a relative pattern and known formats."
+                )
+            self.relative(rule["pattern"])
         if data.get("discover_future_cs"):
             for semester in self.vault.iterdir():
                 if (
@@ -156,6 +168,15 @@ class Config:
         if name == self.data["processing_log"]:
             role = "scaffold"
         return role, root["project"]
+
+    def admitted_input(self, name):
+        """Admit configured input shapes for extraction, never for authorship or writes."""
+        self.check(name)
+        return name in self.data.get("glossary", []) or any(
+            fnmatch.fnmatchcase(name, rule["pattern"])
+            and Path(name).suffix.lower() in rule["formats"]
+            for rule in self.data.get("input_rules", [])
+        )
 
     def check(self, name, write=False):
         rel = self.relative(name)

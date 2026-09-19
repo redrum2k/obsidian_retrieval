@@ -3,7 +3,6 @@ import difflib
 import json
 import os
 import re
-import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -13,6 +12,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from .common import VaultError, canonical, digest, now
 from .registry import Registry
+from .writes import captured_hash, check_filesystem, publish, recover_publication
 
 
 def next_trigger(after):
@@ -263,7 +263,7 @@ class Coordinator:
                 "path": source["path"],
                 "sha256": source["revision"],
                 "status": "processed",
-                "prepared_at": now(),
+                "processed_at": now(),
                 "outputs": source["outputs"],
                 "output_hashes": {
                     a["path"]: a["output_hash"] for a in actions if a["path"] in source["outputs"]
@@ -273,15 +273,34 @@ class Coordinator:
                 "coverage": plan.get("coverage", "Approved proposal; see batch record"),
                 "proposal_id": batch_id,
             }
-            if "processed_at" in record:
-                record["previous_processed_at"] = record.pop("processed_at")
             records["sources"] = [
                 s for s in records.get("sources", []) if s["path"] != source["path"]
             ] + [record]
+        existing_generated = {g["path"]: g for g in records.get("generated_files", [])}
         records["generated_files"] = [
             g for g in records.get("generated_files", []) if g["path"] not in paths
         ] + [
-            {"path": a["path"], "sha256": a["output_hash"], "last_updated_at": now()}
+            {
+                **existing_generated.get(a["path"], {}),
+                "path": a["path"],
+                "sha256": a["output_hash"],
+                "last_updated_at": now(),
+                "user_note_sources": sorted(
+                    {
+                        note
+                        for source in sources
+                        if a["path"] in source["outputs"]
+                        for note in (
+                            source["grounding"].get("user_note_sources")
+                            or (
+                                [source["path"]]
+                                if source["grounding"]["confirmed_user_note"]
+                                else []
+                            )
+                        )
+                    }
+                ),
+            }
             for a in actions
         ]
         records.setdefault("completed_batches", []).append(
@@ -424,13 +443,28 @@ class Coordinator:
             self.validate_links(actions[:-1])
             # All preconditions checked before first mutation; recovery checks durable intent.
             for i, action in enumerate(actions):
+                check_filesystem(self.config, action)
+                if self.db.execute(
+                    "SELECT 1 FROM actions WHERE proposal_id=? AND ordinal=?", (proposal_id, i)
+                ).fetchone():
+                    recover_publication(self.config, action)
                 path = self.config.check(action["path"], write=True)
                 actual = digest(self.config.read(action["path"])) if path.exists() else None
                 intent = self.db.execute(
                     "SELECT state FROM actions WHERE proposal_id=? AND ordinal=?", (proposal_id, i)
                 ).fetchone()
+                captured = captured_hash(self.config, action) if intent else None
+                if captured is not None and captured != action["expected_hash"]:
+                    raise VaultError(
+                        "conflict",
+                        "Captured concurrent edit requires recovery; batch remains incomplete.",
+                    )
                 if actual != action["expected_hash"] and not (
-                    intent and actual == action["output_hash"]
+                    intent
+                    and (
+                        actual == action["output_hash"]
+                        or (actual is None and captured == action["expected_hash"])
+                    )
                 ):
                     raise VaultError(
                         "conflict", "A target differs from its approved or already-applied content."
@@ -450,7 +484,11 @@ class Coordinator:
                 ).fetchone()
                 if intent and actual == action["output_hash"]:
                     continue
-                if actual != action["expected_hash"]:
+                if actual != action["expected_hash"] and not (
+                    intent
+                    and actual is None
+                    and captured_hash(self.config, action) == action["expected_hash"]
+                ):
                     raise VaultError("conflict", "Target changed during application.")
                 if action["before"] is not None:
                     backup = backups / str(i)
@@ -475,6 +513,11 @@ class Coordinator:
                         "Injected crash after a durable action; retry the same approval.",
                     )
             for action in actions:
+                captured = captured_hash(self.config, action)
+                if captured is not None and captured != action["expected_hash"]:
+                    raise VaultError(
+                        "conflict", "Captured editor changes retained; batch is incomplete."
+                    )
                 if digest(self.config.read(action["path"])) != action["output_hash"]:
                     raise VaultError(
                         "conflict", "Post-write verification failed; operation remains incomplete."
@@ -492,28 +535,4 @@ class Coordinator:
             }
 
     def write_action(self, action):
-        # Parent folders must already be designated/created by the owner; no broad mkdir traversal.
-        parent, leaf = self.config.open_parent(action["path"], write=True, create=True)
-        temp = ".vault-stage-" + uuid.uuid4().hex
-        try:
-            fd = os.open(
-                temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=parent
-            )
-            with os.fdopen(fd, "wb") as f:
-                f.write(action["content"].encode())
-                f.flush()
-                os.fsync(f.fileno())
-            if action["expected_hash"] is None:
-                # link() atomically refuses a destination that appeared after preflight.
-                os.link(temp, leaf, src_dir_fd=parent, dst_dir_fd=parent, follow_symlinks=False)
-            else:
-                if digest(self.config.read(action["path"])) != action["expected_hash"]:
-                    raise VaultError("conflict", "Target changed immediately before replacement.")
-                os.replace(temp, leaf, src_dir_fd=parent, dst_dir_fd=parent)
-            os.fsync(parent)
-        finally:
-            try:
-                os.unlink(temp, dir_fd=parent)
-            except FileNotFoundError:
-                pass
-            os.close(parent)
+        publish(self.config, action)
