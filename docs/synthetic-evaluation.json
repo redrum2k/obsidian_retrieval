@@ -1,0 +1,232 @@
+{
+  "kind": "synthetic_smoke_not_release_evaluation",
+  "tasks": 30,
+  "corpus_files": 1,
+  "corpus_bytes": 79349,
+  "machine": "arm64",
+  "python": "3.12.13",
+  "baseline": "one full source read per lookup; policy/agent costs not modeled",
+  "tool_output_reduction_percent": 92.98,
+  "exact_lookup_recall": 1.0,
+  "warm_search_p95_ms": 0.53,
+  "warm_search_median_ms": 0.42,
+  "unchanged_extractor_executions": 0,
+  "cold_refresh_ms": 5,
+  "limitations": [
+    "Synthetic exact matches only; not owner-labeled held-out tasks",
+    "No answer-quality or paraphrase evaluation",
+    "No production latency/token savings claim"
+  ],
+  "results": [
+    {
+      "task": 0,
+      "gold_heading": "Topic 00",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 919
+    },
+    {
+      "task": 1,
+      "gold_heading": "Topic 01",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 919
+    },
+    {
+      "task": 2,
+      "gold_heading": "Topic 02",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 931
+    },
+    {
+      "task": 3,
+      "gold_heading": "Topic 03",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 917
+    },
+    {
+      "task": 4,
+      "gold_heading": "Topic 04",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 921
+    },
+    {
+      "task": 5,
+      "gold_heading": "Topic 05",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 917
+    },
+    {
+      "task": 6,
+      "gold_heading": "Topic 06",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 921
+    },
+    {
+      "task": 7,
+      "gold_heading": "Topic 07",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 927
+    },
+    {
+      "task": 8,
+      "gold_heading": "Topic 08",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 927
+    },
+    {
+      "task": 9,
+      "gold_heading": "Topic 09",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 919
+    },
+    {
+      "task": 10,
+      "gold_heading": "Topic 10",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 921
+    },
+    {
+      "task": 11,
+      "gold_heading": "Topic 11",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 921
+    },
+    {
+      "task": 12,
+      "gold_heading": "Topic 12",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 925
+    },
+    {
+      "task": 13,
+      "gold_heading": "Topic 13",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 919
+    },
+    {
+      "task": 14,
+      "gold_heading": "Topic 14",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 921
+    },
+    {
+      "task": 15,
+      "gold_heading": "Topic 15",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 921
+    },
+    {
+      "task": 16,
+      "gold_heading": "Topic 16",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 927
+    },
+    {
+      "task": 17,
+      "gold_heading": "Topic 17",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 919
+    },
+    {
+      "task": 18,
+      "gold_heading": "Topic 18",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 923
+    },
+    {
+      "task": 19,
+      "gold_heading": "Topic 19",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 919
+    },
+    {
+      "task": 20,
+      "gold_heading": "Topic 20",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 921
+    },
+    {
+      "task": 21,
+      "gold_heading": "Topic 21",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 913
+    },
+    {
+      "task": 22,
+      "gold_heading": "Topic 22",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 921
+    },
+    {
+      "task": 23,
+      "gold_heading": "Topic 23",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 925
+    },
+    {
+      "task": 24,
+      "gold_heading": "Topic 24",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 919
+    },
+    {
+      "task": 25,
+      "gold_heading": "Topic 25",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 919
+    },
+    {
+      "task": 26,
+      "gold_heading": "Topic 26",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 921
+    },
+    {
+      "task": 27,
+      "gold_heading": "Topic 27",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 915
+    },
+    {
+      "task": 28,
+      "gold_heading": "Topic 28",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 915
+    },
+    {
+      "task": 29,
+      "gold_heading": "Topic 29",
+      "gold_found": true,
+      "baseline_tool_tokens": 13110,
+      "retrieval_tool_tokens": 919
+    }
+  ]
+}

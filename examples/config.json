@@ -1,0 +1,13 @@
+{
+  "enabled": false,
+  "vault": "/absolute/path/to/sample-vault",
+  "state": "/absolute/path/to/separate-state",
+  "roots": [{"path": "Study", "role": "study", "project": "sample"}],
+  "exclude": ["Study/Private", "**/*resume*", "**/*contract*"],
+  "outputs": ["Study/Notes"],
+  "processing_log": "Planning/Processing log.json",
+  "operational_files": ["AGENTS.md"],
+  "glossary": [],
+  "user_note_paths": ["Study/Raw/Capture.md"],
+  "approval_public_key": null
+}

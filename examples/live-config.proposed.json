@@ -1,0 +1,157 @@
+{
+  "enabled": false,
+  "vault": "/Users/nikitaafanaskin/Documents/Personal vault",
+  "state": "/Users/nikitaafanaskin/Library/Application Support/obsidian-retrieval",
+  "roots": [
+    {
+      "path": "Fall_2026/RN103",
+      "role": "study",
+      "project": "RN103"
+    },
+    {
+      "path": "Fall_2026/EC204",
+      "role": "study",
+      "project": "EC204"
+    },
+    {
+      "path": "Fall_2026/EC422",
+      "role": "study",
+      "project": "EC422"
+    },
+    {
+      "path": "Fall_2026/CS132",
+      "role": "study",
+      "project": "CS132"
+    },
+    {
+      "path": "Fall_2026/CS330",
+      "role": "study",
+      "project": "CS330"
+    },
+    {
+      "path": "Leetcode",
+      "role": "study",
+      "project": "Leetcode"
+    },
+    {
+      "path": "Research",
+      "role": "study",
+      "project": "Research"
+    },
+    {
+      "path": "Engineering",
+      "role": "study",
+      "project": "Engineering"
+    },
+    {
+      "path": "Daily",
+      "role": "study",
+      "project": "Daily"
+    },
+    {
+      "path": "Research/King",
+      "role": "study",
+      "project": "King"
+    },
+    {
+      "path": "Research/CheYu Lee",
+      "role": "study",
+      "project": "CheYu Lee"
+    },
+    {
+      "path": "Research/Van Alstyn",
+      "role": "study",
+      "project": "Van Alstyn"
+    }
+  ],
+  "exclude": [
+    ".obsidian",
+    "Templates",
+    "Planning",
+    "AGENTS.md",
+    "Fall_2026/EC204/Data/Starting set",
+    "Daily/nikita-evo2.pdf",
+    "**/*resume*",
+    "**/*résumé*",
+    "**/*contract*",
+    "**/*agreement*",
+    "**/README*",
+    "**/CONTRIBUTING*",
+    "**/LICENSE*",
+    "**/CHANGELOG*",
+    "**/Makefile",
+    "**/Dockerfile",
+    "**/package*",
+    "**/requirements*",
+    "**/lockfiles",
+    "**/dependencies",
+    "**/environments",
+    "**/.DS_Store",
+    "Huyen"
+  ],
+  "outputs": [
+    "Leetcode/Problems",
+    "Engineering/Weeks",
+    "Engineering/Code Archaeology",
+    "Engineering/Concepts",
+    "Fall_2026/RN103/Notes",
+    "Fall_2026/RN103/Concepts",
+    "Fall_2026/EC204/Notes",
+    "Fall_2026/EC204/Concepts",
+    "Fall_2026/EC422/Notes",
+    "Fall_2026/EC422/Concepts",
+    "Fall_2026/CS132/Notes",
+    "Fall_2026/CS132/Concepts",
+    "Fall_2026/CS330/Notes",
+    "Fall_2026/CS330/Concepts",
+    "Research/King/Notes",
+    "Research/CheYu Lee/Notes",
+    "Research/Van Alstyn/Notes"
+  ],
+  "companion_roots": [
+    "Fall_2026/RN103/Raw",
+    "Fall_2026/EC204/Raw",
+    "Fall_2026/EC422/Raw",
+    "Fall_2026/CS132/Raw",
+    "Fall_2026/CS330/Raw",
+    "Leetcode/Raw",
+    "Research/King/Raw",
+    "Research/CheYu Lee/Raw",
+    "Research/Van Alstyn/Raw"
+  ],
+  "glossary": [
+    "Research/Shared/Glossary inbox.md",
+    "Research/CheYu Lee/Raw/DNA glossary inbox.md"
+  ],
+  "processing_log": "Planning/Processing log.json",
+  "operational_files": [
+    "AGENTS.md",
+    "Planning/Task attachment lifecycle.json",
+    "Planning/Vault convention changes.md"
+  ],
+  "task_lifecycle": "Planning/Task attachment lifecycle.json",
+  "discover_future_cs": true,
+  "cs_study_exception": true,
+  "require_grounding_for_index": true,
+  "user_note_paths": [
+    "Fall_2026/CS132/assignments/Assignment 1_Nikita Afanaskin.pdf",
+    "Fall_2026/CS132/cs132-f26/labs/1/Nikita Afanaskin_CS132_lab1 writeup.docx",
+    "Fall_2026/CS132/cs132-f26/labs/1/Nikita Afanaskin_CS132_lab1 writeup.pdf",
+    "Fall_2026/RN103/Raw/Amore_Hinduism reading.md",
+    "Leetcode/Raw/2026-09-12 Problems.md",
+    "Leetcode/Raw/2026-09-13 Problems.md",
+    "Leetcode/Raw/2026-09-14 Problem.md",
+    "Leetcode/Raw/2026-09-16 Problems.md",
+    "Leetcode/Raw/2026-09-17 Problems.md",
+    "Leetcode/Raw/2026-09-18 Problems.md"
+  ],
+  "integration_permissions": {},
+  "approval_public_key": null,
+  "policy": {
+    "path": "AGENTS.md",
+    "sha256": "56705d66650464e2d91b92151d267c3f2730c6ea1616c9457d4c2b9704f73aa6"
+  },
+  "extraction": {
+    "ocr_language": "eng"
+  }
+}
