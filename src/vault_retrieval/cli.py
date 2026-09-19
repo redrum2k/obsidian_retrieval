@@ -4,6 +4,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from .approval import export_request
 from .common import VaultError, canonical
 from .config import Config
 from .coordinator import Coordinator, next_trigger
@@ -26,6 +27,7 @@ def parser():
     sub = root.add_subparsers(dest="command", required=True)
     help_text = {
         "validate": "Validate configuration without opening source contents or initializing an index",
+        "extract": "Extract and index selected discovered documents; may run OCR/converters",
         "refresh": "Refresh incremental inventory; --full reconciles all hashes",
         "rebuild": "Rebuild search data, retaining pending work and approval history",
         "search": "Find ranked evidence sections",
@@ -39,11 +41,14 @@ def parser():
         "intake": "Refresh and expose pending work to the existing scheduler's agent",
         "propose": "Persist a concrete reviewable plan without vault writes",
         "acknowledge": "Confirm the existing host delivered a proposal notification",
+        "approval-request": "Export an immutable request for the owner-facing macOS review app",
+        "apply-hook": "Resume a batch authorized by a recorded conversation hook event",
         "apply": "Apply only a proposal with a trusted signed approval receipt",
         "schedule": "Show next external trigger time; does not install a scheduler",
         "visual": "Locate cached renders for current source evidence",
     }
     examples = {
+        "extract": "--ids DOCUMENT_ID",
         "search": "--query 'echelon form'",
         "read-sections": "--ids SECTION_ID",
         "changes": "--since 0",
@@ -51,6 +56,8 @@ def parser():
         "processing-status": "--ids DOCUMENT_ID",
         "propose": "--plan plan.json",
         "acknowledge": "--id PROPOSAL_ID",
+        "approval-request": "--id PROPOSAL_ID",
+        "apply-hook": "--id PROPOSAL_ID",
         "apply": "--id PROPOSAL_ID --receipt receipt.json",
         "visual": "--id DOCUMENT_ID",
     }
@@ -69,9 +76,16 @@ def parser():
         if name == "search":
             p.add_argument("--query", required=True)
             p.add_argument("--source-role")
-        if name in {"read-sections", "processing-status"}:
+        if name in {"read-sections", "processing-status", "extract"}:
             p.add_argument("--ids", nargs="+", required=True)
-        if name in {"neighbors", "acknowledge", "apply", "visual"}:
+        if name in {
+            "neighbors",
+            "acknowledge",
+            "apply",
+            "visual",
+            "approval-request",
+            "apply-hook",
+        }:
             p.add_argument("--id", required=True)
         if name == "neighbors":
             p.add_argument(
@@ -92,6 +106,10 @@ def parser():
                 "--quiet",
                 action="store_true",
                 help="Emit nothing when no new host action is required",
+            )
+        if name == "acknowledge":
+            p.add_argument(
+                "--session-id", help="Conversation where the complete proposal was delivered"
             )
         if name == "apply":
             p.add_argument("--receipt", required=True)
@@ -150,6 +168,8 @@ def run(args):
         cmd = args.command
         if cmd in {"refresh", "rebuild"}:
             items = [service.refresh(full=getattr(args, "full", False), rebuild=cmd == "rebuild")]
+        elif cmd == "extract":
+            items = [service.extract_documents(args.ids)]
         elif cmd == "search":
             items = service.search(args.query, args.project, args.source_role)
         elif cmd == "read-sections":
@@ -196,7 +216,13 @@ def run(args):
         elif cmd == "propose":
             items = [coordinator.propose(read_json(args.plan))]
         elif cmd == "acknowledge":
-            items = [coordinator.acknowledge(args.id)]
+            items = [coordinator.acknowledge(args.id, args.session_id)]
+        elif cmd == "approval-request":
+            items = [export_request(coordinator, args.id)]
+        elif cmd == "apply-hook":
+            from .hook_approval import recorded_receipt
+
+            items = [coordinator.apply(args.id, recorded_receipt(service, args.id))]
         elif cmd == "apply":
             items = [coordinator.apply(args.id, read_json(args.receipt))]
         elif cmd == "visual":

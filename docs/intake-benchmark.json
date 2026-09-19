@@ -1,0 +1,24 @@
+{
+  "fixture": "isolated Markdown with simulated per-file extraction delay",
+  "documents": 12,
+  "simulated_delay_ms": 50.0,
+  "results": {
+    "eager_baseline": {
+      "before_json_ms": 748.51,
+      "json_ms": 0.84,
+      "total_ms": 749.36,
+      "extractor_calls": 12,
+      "pending": 12,
+      "response_bytes": 685
+    },
+    "discovery_intake": {
+      "before_json_ms": 17.87,
+      "json_ms": 0.32,
+      "total_ms": 18.2,
+      "extractor_calls": 0,
+      "pending": 12,
+      "response_bytes": 683
+    }
+  },
+  "limitation": "Not a live-corpus benchmark or an accuracy/token-savings evaluation."
+}

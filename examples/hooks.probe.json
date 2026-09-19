@@ -1,0 +1,17 @@
+{
+  "description": "Vault approval diagnostic only; captures event metadata, never approves or writes vault files.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/nikitaafanaskin/Documents/Developer/obsidian_retrieval/.venv/bin/python -m vault_retrieval.hook --probe-dir /Users/nikitaafanaskin/.codex/vault-hook-probe --probe-session 01a08699-7b7c-77f3-b634-390cb23b0be8",
+            "timeout": 10,
+            "statusMessage": "Checking vault hook event metadata"
+          }
+        ]
+      }
+    ]
+  }
+}

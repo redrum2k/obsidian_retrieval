@@ -1,12 +1,16 @@
+> Current chat-approval setup: [activation and pilot](hook-approval-setup.md). The origin mismatch is resolved for the pinned desktop build. Signed receipt instructions below apply only to signed mode.
+
+> For the requested chat-command workflow, use [hook approval setup](hook-approval-setup.md). The hook adapter is implemented but live activation requires owner hook trust and the approved-batch pilot. Native signing below remains an optional existing path, not a prerequisite for the proposed conversation flow.
+
 # Connect the existing heartbeat and evaluate the workflow
 
 ## Current boundary
 
-The existing manual conversation workflow remains separate. This CLI has tested proposal, create/update, registry, and recovery operations, but the conversation-to-trusted-approval-receipt adapter is not implemented. A chat reply alone cannot currently invoke its approved-write path. Do not install an agent-accessible signing key as a shortcut. Live configuration remains a disabled review draft.
+The existing manual conversation workflow remains separate. This CLI has tested proposal, create/update, registry, and recovery operations, and now has a local macOS review/signing adapter awaiting owner enrollment and manual authentication validation. A chat reply alone cannot currently invoke its approved-write path. Do not install an agent-accessible signing key as a shortcut. Live configuration remains a disabled review draft.
 
 ## Connection plan: intake first, approval second
 
-There are two connections. The first is a configuration/prompt change. The second requires application code that does not exist yet. The signature requirement is this project's implementation choice, not an OpenAI requirement. No hidden Codex setting turns a chat reply into a receipt.
+There are two connections. The first is a configuration/prompt change. The second uses the newly implemented native review adapter and requires owner enrollment plus a manual authentication check. The signature requirement is this project's implementation choice, not an OpenAI requirement. No hidden Codex setting turns a chat reply into a receipt.
 
 ### 1. Prepare the local installation
 
@@ -28,13 +32,14 @@ Check the current vault AGENTS.md against the pinned hash before enabling. If ch
 After configuration review and enabling:
 
 ```sh
-uv run vault --config config.local.json refresh --full
-uv run vault --config config.local.json health
 uv run vault --config config.local.json intake --quiet
 uv run vault --config config.local.json pending
+uv run vault --config config.local.json health
+# Select relevant IDs from pending; this operation may run OCR/converters:
+uv run vault --config config.local.json extract --ids DOCUMENT_ID
 ```
 
-These commands index/read eligible files and update external state; they do not write notes. Inspect failures and pending entries, page every continuation, and verify Raw/glossary priority. New filenames matching configured shapes need no filename-by-filename admission. Grounding for note creation remains separate. For production proposal processing, validate essential Office/scan renderers and representative corpus coverage first.
+Intake discovers/hashes eligible files without extraction; `extract` indexes only selected documents. These commands update external state and do not write notes. An optional `refresh --full` deliberately extracts the whole eligible corpus and can be slow. Inspect failures and pending entries, page every continuation, and verify Raw/glossary priority. New filenames matching configured shapes need no filename-by-filename admission. Grounding for note creation remains separate. For production proposal processing, validate essential Office/scan renderers and representative corpus coverage first.
 
 Have the existing conversation retrieve a small changed capture, draft one grounded plan following `docs/host-integration.md`, and submit `propose --plan FILE`. Verify its full diff, source revisions, output destinations and registry action. This demonstrates discovery → proposal without applying it. Failed/missed checks retain work.
 
@@ -52,13 +57,15 @@ and use its plan schema and bounded retrieval protocol. Run:
 
 uv run --project /Users/nikitaafanaskin/Documents/Developer/obsidian_retrieval vault --config /Users/nikitaafanaskin/Documents/Developer/obsidian_retrieval/config.local.json intake --quiet
 
-Page pending work. Retrieve changed Raw/glossary inputs first, then eligible
+Page pending work. For selected needs_extraction document IDs, call extract
+--ids before retrieval; never substitute refresh --full for a scheduled check.
+Retrieve changed Raw/glossary inputs first, then eligible
 study documents, plus relevant existing notes. Submit one concrete grounded
 plan using propose --plan FILE. Deliver its complete review artifact in this
 conversation; acknowledge its proposal ID only after delivery. Stay quiet for
 no changes or an unchanged already-delivered proposal. Preserve failed work.
 Never treat silence, a timeout, or a scheduled invocation as approval.
-Do not call apply until the trusted approval adapter is implemented and the
+Do not call apply until the trusted approval adapter is enrolled/validated and the
 exact batch has explicit human approval. A chat reply alone is not currently
 a usable CLI approval receipt. Report that limitation rather than bypass it.
 Keep the existing separately authorized attachment lifecycle in this prompt.
@@ -68,26 +75,13 @@ Use absolute paths so the heartbeat may keep its existing vault working director
 
 Run the updated prompt manually against an isolated sample first, then inspect the first actual scheduled run. Confirm one delivered proposal, acknowledgment only after delivery, and silence on the next unchanged invocation. Keep the current lifecycle behavior intact. Official management guidance: [Scheduled tasks](https://learn.chatgpt.com/docs/automations?surface=app).
 
-### 4. Implement the missing approval adapter
+### 4. Set up and validate the approval adapter
 
-**This step is engineering work, not something you can finish by pasting the prompt.** The project verifies signed receipts but has no trusted signer/review app or supported conversation-event bridge. Do not scrape conversation text for “approve,” let the agent assert approval, or expose a private key to the agent.
+The macOS adapter is now implemented. Follow [approval-adapter.md](approval-adapter.md) for exact build, owner enrollment, public-key configuration, review-request export, receipt generation and apply commands. This supersedes the earlier instruction to build a signer from scratch.
 
-Recommended initial integration: keep proposals/notifications in the same conversation, with a local owner-facing review application providing the final approval action. This adds an owner click/confirmation outside the conversation. It is a proposed integration choice, not an already adopted change to your workflow. If approval must happen solely by replying in chat, first establish a supported trusted host event API; no such connection is verified here.
+It keeps proposal delivery in the conversation and uses a native local review window plus macOS owner authentication for final approval. A chat reply alone still does not generate a receipt. Native authentication and the real host boundary require manual validation before live release; do not treat automated fixture signatures as owner approval.
 
-Build the adapter with these responsibilities:
-
-1. Load a proposal by ID from the configured external state; validate the canonical body/digest, source and target revisions, policy/configuration revision, and proposal state. Resolve references from trusted configuration, not arbitrary agent-provided URLs/paths.
-2. Display the complete immutable diff, sources, grounding, uncertainties, output mappings and registry change. Show creates versus updates and the proposal ID/digest. Any proposal change requires fresh review.
-3. Offer explicit approve/reject/cancel actions. Bind approval to that displayed digest. The owner confirmation must require an OS-protected user-presence action and a protected signer unavailable to the agent; a same-user script or an agent-clickable web button alone is insufficient. Establish and test this trust boundary before calling it secure.
-4. Hold the signing key in that protected component. Export only the public key into configuration. Provision it before producing the final live proposal, because configuration changes invalidate existing proposals.
-5. After explicit approval, emit the receipt schema documented in `docs/host-integration.md`. Reject/cancel emits no approval receipt. Do not mutate proposal content to add approval.
-6. Hand the receipt reference to the host, which runs the existing command below and reports its actual outcome. Recheck all preconditions at apply time. On a conflict, stop and prepare a new review or follow recovery; do not reuse approval for a new diff.
-
-```sh
-uv run --project /Users/nikitaafanaskin/Documents/Developer/obsidian_retrieval vault --config /Users/nikitaafanaskin/Documents/Developer/obsidian_retrieval/config.local.json apply --id PROPOSAL_ID --receipt /absolute/path/to/receipt.json
-```
-
-Adapter acceptance tests: a scheduled run alone cannot obtain approval; a fabricated chat quote cannot approve; altered/replayed-for-another-proposal receipts fail; cancel/reject writes nothing; explicit owner approval applies only the reviewed batch; unchanged retry returns the recorded result. Test the owner-presence boundary against the actual host's shell and UI automation capabilities, not just an ordinary web client.
+After that validation, use the heartbeat amendment in the adapter guide, preserving the existing schedule and attachment lifecycle. No automation settings have been changed by this implementation.
 
 ### 5. Rehearse end to end, then release
 

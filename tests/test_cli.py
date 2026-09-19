@@ -49,3 +49,19 @@ def test_policy_change_prevents_service(env, tmp_path):
     assert call(config, "health").returncode == 0
     policy.write_text("Changed policy")
     assert json.loads(call(config, "health").stdout)["error"] == "policy_changed"
+
+
+def test_missing_and_malformed_config_have_actionable_errors(tmp_path):
+    config = tmp_path / "missing.json"
+    result = call(config, "refresh", "--full")
+    error = json.loads(result.stdout)
+    assert result.returncode == 2
+    assert error["error"] == "config_not_found"
+    assert "examples/live-config.proposed.json" in error["message"]
+    assert "validate" in error["message"]
+    assert not config.exists()
+    for content in ("{broken", "[]"):
+        config.write_text(content)
+        result = call(config, "health")
+        assert result.returncode == 2
+        assert json.loads(result.stdout)["error"] == "invalid_config"

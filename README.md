@@ -1,99 +1,274 @@
-# Local vault retrieval
+# Obsidian Retrieval
 
-A Python CLI for local SQLite FTS5 retrieval, cached document extraction, durable intake proposals, and explicitly approved note/log updates. The retrieval service and processing coordinator are separate modules. The existing external automation remains the scheduler.
+**Local evidence retrieval and explicitly approved note processing for Obsidian vaults.**
 
-**Current status:** implemented and tested against isolated vaults. Live indexing is disabled. The proposed live configuration excludes Huyen for now. A real-corpus evaluation and trusted conversation-approval adapter are required before live release; see [implementation status](docs/implementation-status.md).
+Obsidian Retrieval gives an AI agent a smaller, traceable view of a vault: discover changed inputs, extract only what is needed, retrieve relevant sections, and propose concrete note updates. The owner reviews the diff before anything is applied.
 
-## Install and verify
+Obsidian files remain authoritative. SQLite indexes, extraction caches, proposals, and recovery data live outside the vault. Search starts with SQLite FTS5; no embedding service, vector database, or hosted index is required.
 
-Requires Python 3.12+ and `uv`. Dependencies are pinned in `uv.lock`.
+> **Status:** working personal deployment with automated tests and an owner-reported successful chat-approval trial. The desktop hook is tied to a reviewed app build. Full real-corpus accuracy, token-savings, and sync/recovery evaluation remain open; this is not a general-purpose production release.
 
-```sh
-uv sync --locked
-uv run vault --help
-uv run pytest -q
-uv run ruff check src tests examples
-uv run python examples/evaluate.py --output docs/synthetic-evaluation.json
+## Why this exists
+
+Agents often reread entire notes, processing logs, PDFs, and policy files for every task. That repeats work and fills the context window with material that has not changed.
+
+This project separates three responsibilities:
+
+- **Retrieval** returns bounded evidence with source revisions and locators.
+- **Processing** turns selected evidence into one reviewable proposal, using an existing agent.
+- **Scheduling** stays with the existing external heartbeat or scheduler.
+
+The retrieval service does not write arbitrary notes or call an LLM. Approval covers the exact proposed changes, not ongoing permission to rewrite the vault.
+
+## Features
+
+- Incremental discovery with content hashes, change checkpoints, deletion handling, and full reconciliation.
+- Fast scheduled intake that avoids extraction, OCR, and conversion before reporting pending work.
+- Cached Markdown, DOCX, PPTX, and PDF extraction; optional local OCR and Office conversion/rendering.
+- SQLite FTS5 search over titles, aliases, headings, and body text.
+- Revision-scoped section reads, adjacent context, links/backlinks, source/output relationships, and processing status.
+- JSON responses with token budgets, explicit truncation, and continuation cursors.
+- Explicit allowlists, deny rules, code/sensitive-file exclusions, and optional policy-file fingerprinting.
+- Concrete proposals containing complete output contents, diffs, source mappings, and processing-log updates.
+- Chat-command approval through a verified desktop hook, or signed approval through the optional macOS app.
+- Durable pending work, duplicate suppression, backups, conflict detection, and interrupted-application recovery.
+
+## How it works
+
+```mermaid
+flowchart TD
+    Scheduler[Existing scheduler / heartbeat] --> Intake[Discover changed eligible files]
+    Vault[(Authoritative Obsidian files)] --> Intake
+    Intake --> Pending[Retained pending work]
+    Pending --> Agent[Existing AI agent]
+    Agent --> Extract[Extract selected inputs]
+    Extract --> Cache[(External extraction cache + SQLite FTS5)]
+    Cache --> Evidence[Bounded sections + provenance]
+    Evidence --> Agent
+    Agent --> Proposal[Immutable proposal + complete diff]
+    Proposal --> Owner[Owner review]
+    Owner --> Approval[Explicit approval bound to the batch]
+    Approval --> Apply[Validate hashes and apply approved changes]
+    Apply --> Vault
+    Apply --> Log[Processing registry + recovery journal]
 ```
 
-The tokenizer is `cl100k_base`, supplied by the pinned tiktoken dependency. Its first use downloads tokenizer data if absent from the local cache; no vault content is sent. Bootstrap it before offline use:
+A normal run discovers changes, retrieves selected evidence, and delivers one proposal. An unchanged delivered proposal stays quiet. Failed or missed runs retain work for the next successful check.
+
+## Requirements
+
+- Python **3.12+** and [`uv`](https://docs.astral.sh/uv/).
+- A SQLite build with FTS5 support.
+- A local vault and a separate external state directory.
+- An agent capable of calling the CLI and presenting complete review artifacts.
+- Optional: **Tesseract** with the required language data for scanned PDFs.
+- Optional: **LibreOffice** (`soffice`) for Office rendering and legacy document conversion.
+- Optional: macOS and the supported desktop build for chat-hook approval, or a Secure Enclave-capable Mac for the native signing app.
+
+Dependencies are locked in `uv.lock`. Missing extraction/rendering tools produce visible failures; they do not authorize processing incomplete evidence. Original documents are preserved.
+
+## Quick start
+
+Start with a disposable sample vault before connecting personal notes.
+
+```sh
+git clone https://github.com/redrum2k/obsidian_retrieval.git
+cd obsidian_retrieval
+uv sync --locked
+cp examples/config.json config.local.json
+```
+
+The repository is private; cloning requires access. Edit `config.local.json` with existing absolute vault/state paths, allowed input roots, exclusions, output folders, and grounding conventions. Keep state outside the vault and synced directories. The sample config is disabled by default.
+
+```sh
+# Validate configuration without initializing an index or extracting sources.
+uv run vault --config config.local.json validate
+```
+
+After reviewing the configuration, set `enabled` to `true`, then discover work:
+
+```sh
+uv run vault --config config.local.json intake --quiet
+uv run vault --config config.local.json pending
+uv run vault --config config.local.json health
+
+# Select IDs returned by pending; this step may invoke OCR or conversion.
+uv run vault --config config.local.json extract --ids DOCUMENT_ID
+uv run vault --config config.local.json search --query 'your topic'
+```
+
+`intake --quiet` can intentionally print nothing when no host action is needed. It does not perform expensive extraction. `refresh` can extract eligible inputs, and `refresh --full` additionally reconciles content hashes; neither should replace discovery-only intake in a routine scheduled check.
+
+For offline use, populate the tokenizer cache while online:
 
 ```sh
 uv run python -c 'import tiktoken; tiktoken.get_encoding("cl100k_base")'
 ```
 
-Markdown, DOCX and PPTX text extraction use local libraries. PDFs use PyMuPDF; scan OCR uses the locally installed `tesseract` executable and configured language data. Office rendering and legacy DOC/PPT/ODT/ODP conversion require `soffice` (LibreOffice). Missing render/OCR dependencies are visible and block processing of affected visual evidence. Extraction never modifies originals. PyMuPDF is AGPL/commercial licensed; review that dependency before redistributing this application.
+The initial tokenizer download does not transmit vault contents. Retrieval itself is local; an external agent host may send retrieved evidence to its configured model.
 
-## Configuration and access
+## Configuration
 
-Copy [examples/config.json](examples/config.json), set an existing vault path and a separate state directory, define explicit roots/exclusions/output folders, and review the result. Configuration remains disabled until `enabled` is deliberately set to `true`.
+[examples/config.json](examples/config.json) is the portable starting point. The [deployment example](examples/live-config.proposed.json) and [live-configuration guide](docs/live-configuration.md) describe this project's personal installation and should not be copied blindly.
+
+| Setting | Purpose |
+| --- | --- |
+| `vault`, `state` | Authoritative source directory and separate private runtime storage |
+| `roots`, `glossary` | Explicitly admitted source areas and glossary inputs |
+| `exclude` | Deny rules; exclusions take precedence over admission |
+| `outputs`, `companion_roots` | Destinations for approved notes and labeled derived companions |
+| `input_rules` | Admission patterns for new files of known shapes |
+| `user_note_paths`, `integration_permissions` | Grounding conventions and explicit named-source exceptions |
+| `processing_log`, `operational_files` | Existing registry and specifically admitted workflow files |
+| `policy` | Optional policy path and reviewed content fingerprint |
+| `approval_scheme` | Chat-hook or signed-receipt approval mechanism |
+
+Input admission permits retrieval, not automatic note generation. Context-only readings need an appropriate user-note anchor or explicit integration permission before they can initiate processing. Unknown source roles and missing processing mappings are not inferred as authorization.
+
+The agent must still read applicable `AGENTS.md` instructions. A pinned policy hash catches changes; it does not replace policy interpretation. Never update a policy fingerprint merely to suppress an error.
+
+## CLI reference
+
+Run `uv run vault --help` or `uv run vault COMMAND --help` for flags.
+
+| Commands | Responsibility |
+| --- | --- |
+| `validate`, `health` | Configuration and operational status |
+| `intake`, `pending`, `notifications` | Discover changes, retain work, and expose undelivered proposals |
+| `extract`, `visual` | Extract selected documents and locate cached visual artifacts |
+| `search`, `read-sections`, `neighbors` | Retrieve bounded evidence and relationships |
+| `changes`, `processing-status` | Inspect source changes and processing provenance |
+| `propose`, `acknowledge` | Persist a concrete plan and record its actual delivery |
+| `apply-hook` | Apply a batch with an existing valid hook approval |
+| `approval-request`, `apply` | Export a native review request and apply a signed receipt |
+| `refresh`, `rebuild` | Reconcile sources or rebuild derived search data |
+| `schedule` | Inspect the deployment's default recurrence; installs no scheduler |
+
+Examples:
 
 ```sh
-uv run vault --config config.local.json validate --budget 8000
-uv run vault --config config.local.json refresh
-uv run vault --config config.local.json refresh --full
-```
-
-The live proposal is [examples/live-config.proposed.json](examples/live-config.proposed.json); its scope and remaining decisions are explained in [docs/live-configuration.md](docs/live-configuration.md). Do not enable it before the owner's configuration review. No live index was created during implementation.
-
-State contains a private SQLite database, extraction/render caches, immutable proposal artifacts, and backups. Keep it outside the vault, synced directories, and agent-accessible approval key storage. Root selection is explicit; sensitive-name filters and protected infrastructure exclusions always apply. All symlinks and hardlinks are conservatively rejected. Eligible CS study documents can coexist with protected code directories; other marked code projects are excluded in full.
-
-The current vault `AGENTS.md` hash can be pinned in `policy`. A policy change blocks operations until its meaning is reviewed and configuration updated. This check does not replace the agent's duty to read and follow policy and relevant conventions.
-
-## Evidence retrieval
-
-```sh
-uv run vault --config config.local.json search --query 'row operations' --project CS132
+uv run vault --config config.local.json search --query 'row operations' --project sample
 uv run vault --config config.local.json read-sections --ids SECTION_ID --budget 4000
 uv run vault --config config.local.json neighbors --id SECTION_ID --relation adjacent
-uv run vault --config config.local.json changes --since 0
 uv run vault --config config.local.json processing-status --ids DOCUMENT_ID
-uv run vault --config config.local.json visual --id DOCUMENT_ID
-uv run vault --config config.local.json health
+uv run vault --config config.local.json changes --since 0
 ```
 
-Responses are JSON. Every accepted response fits its requested token budget, including metadata and the final newline. Defaults: 2,000 tokens, 4,000 for section reads, up to 8 items. Limits: 256–8,000 tokens, 1–20 items/IDs. Metadata-heavy items may require a larger budget. Errors return concise JSON and exit code 2; success returns 0.
+Responses use JSON and a pinned local tokenizer. Default budgets are 2,000 tokens, or 4,000 for section reads, with up to 8 items. Accepted budgets range from 256 to 8,000 tokens; calls accept at most 20 items/IDs. Metadata and errors count toward the response budget. Follow returned continuations using the same operation and filters; do not treat truncated output as a complete result.
 
-Use the returned opaque `continuation` with the same operation/filters. Section spans include exact character offsets within their located extracted section. Changed results invalidate continuations explicitly. `changes --since` uses the event sequence shown as `seq`; store it only after consuming its event. Pending processing work is independent of that cursor.
+Evidence includes source revisions and locators. The service verifies source freshness before returning cached evidence; stale content is not silently presented as current. Ranking scores are ordering signals, not confidence probabilities. CLI errors use exit code 2; successful CLI requests use 0.
 
-Titles and aliases receive higher FTS ranking weights than body text. Queries are treated as literal terms, not executable FTS syntax. Source hashes are checked before evidence is returned; stale results are withheld and flagged. Context-only sources are metadata-only unless a named integration permission is configured. No embeddings or hosted index is used.
+## Review and approval
 
-## Scheduled processing
-
-```sh
-uv run vault --config config.local.json intake --quiet
-uv run vault --config config.local.json pending
-uv run vault --config config.local.json notifications
-```
-
-The existing heartbeat invokes `intake` Monday, Wednesday, Friday, Sunday at 12:10 p.m. `America/New_York`. `schedule` computes the next time for inspection; it creates no timer. Intake refreshes before reporting retained work, with Raw/glossary priority. It does not synthesize arbitrary study notes: the existing agent prepares a concrete grounded plan using bounded evidence and relevant existing notes.
+The agent uses the [plan schema](docs/host-integration.md) to supply source revisions, exact output contents, expected target hashes, provenance, and uncertainties. The coordinator adds the matching registry update.
 
 ```sh
 uv run vault --config config.local.json propose --plan plan.json
 uv run vault --config config.local.json notifications
-uv run vault --config config.local.json acknowledge --id PROPOSAL_ID
+
+# Only after the complete review artifact is delivered in this conversation:
+uv run vault --config config.local.json acknowledge \
+  --id PROPOSAL_ID --session-id CONFIGURED_SESSION_ID
 ```
 
-`--plan -` accepts JSON on stdin. `intake --plan plan.json` can refresh and submit a prepared plan in one operation. Plans contain exact full output contents, expected target hashes (null for new files), input revisions, source/output mappings, grounding, visual-review coverage where needed, and uncertainties. The service generates the matching JSON-registry change while preserving unknown existing fields. See [the host integration contract](docs/host-integration.md).
+`--plan -` also accepts JSON on stdin. Proposal creation and acknowledgment do not write vault notes.
 
-Proposal artifacts outside the vault include the complete diff and source provenance. The host posts one proposal to the existing conversation, then acknowledges delivery using its stable ID. An unchanged delivered pending proposal stays quiet. Failed/ambiguous delivery remains retryable; the host must deduplicate by proposal ID. Do not acknowledge before delivery or treat delivery/silence as approval.
+### Chat approval
 
-Application requires a signed approval receipt from a trusted owner/host boundary:
+Follow [hook-approval-setup.md](docs/hook-approval-setup.md) for this deployment. Hook examples contain installation-specific paths; replace them for another checkout.
+
+After reviewing a delivered proposal, the owner sends this as **plain text in the configured conversation**:
+
+```text
+IMPLEMENT FULL_PROPOSAL_ID
+```
+
+The hook checks the exact command, conversation, delivery record, immutable proposal/configuration digest, and source/target conditions. It records approval and instructs the same agent turn to execute `apply-hook`. No separate receipt handoff is needed. Recording approval is not completion: the agent must report the actual application result.
+
+The hook is bound to reviewed desktop build fingerprints. Host upgrades stop approval until compatibility is revalidated. These checks are local workflow controls, not cryptographic authentication against unrestricted same-user code. The [host evidence](docs/hook-host-evidence.md) distinguishes source inspection, fixture tests, and the live pilot.
+
+### Signed approval
+
+The optional [macOS approval app](docs/approval-adapter.md) reviews the exact request and signs it using an owner-enrolled Secure Enclave key. The CLI also supports Ed25519 receipt verification. The private signing material is not part of this repository.
 
 ```sh
-uv run vault --config config.local.json apply --id PROPOSAL_ID --receipt receipt.json
+uv run vault --config config.local.json approval-request --id PROPOSAL_ID
+# Review and approve using the configured trusted signing app.
+uv run vault --config config.local.json apply --id PROPOSAL_ID --receipt /private/path/receipt.json
 ```
 
-There is intentionally no `--approved`, `--yes`, or agent-accessible signer. The configured public key verifies a receipt bound to the exact proposal digest. The existing conversation approval bridge is not connected; live writes remain unavailable until it is. Test keys exist only in temporary test fixtures.
+Switching approval schemes or changing configuration invalidates old proposals. Regenerate the diff and obtain fresh approval; there is no `--approved` flag or blanket autonomous-writing mode.
 
-Notes remain drafts. Processing completion means verified output files plus the approved processing-log update, not learning/mastery. Failed or missed checks retain work; source changes supersede stale proposals. Writes retain backups and durable per-file intent so retries reuse matching outputs. Original sources, code, settings, and task attachments remain protected.
+## Connect an existing heartbeat
 
-## Recovery and limits
+Use the [complete heartbeat prompt](docs/heartbeat-prompt.md) and [connection guide](docs/connection-and-evaluation.md). The supplied prompt is specific to the existing personal deployment; adapt its paths, conversation ID, policy, and narrowly scoped attachment exception before reuse elsewhere.
 
-- Run `refresh --full` to reconcile content hashes even when size/mtime match; run `rebuild` to reconstruct search sections while preserving identity/work/approval records.
-- Never delete the entire state directory to rebuild search. Back it up securely: it includes non-rebuildable pending proposals and application history. No automatic history/backup expiry is currently configured.
-- A failed multi-file application remains incomplete. Retry the same signed receipt only if sources and targets still match; divergent user edits require a new reviewed plan. Do not blindly restore backups over newer content.
-- Writes use staged files, no-follow path access, source/target checks, and exclusive coordination between this tool's processes. Ordinary filesystems do not offer atomic compare-and-swap against unrelated editors. A noncooperating editor can still race the final check/replacement; this is a live-release limitation, not a claim of cross-application transactional isolation.
-- No production token-saving, recall, or latency target is claimed from synthetic tests. No Obsidian rendering or existing scheduler connection has been verified.
+The external scheduler owns trigger times and daylight-saving behavior. This project creates no duplicate scheduler. Scheduled runs prepare proposals; they never authorize application. Keep source discovery, selective extraction, planning, delivery, and approval as distinct steps.
 
-Implementation references: [SQLite FTS5 ranking](https://www.sqlite.org/fts5.html), [PyMuPDF page extraction/rendering](https://pymupdf.readthedocs.io/en/latest/page.html).
+## Safety, recovery, and private data
+
+- Originals, code/infrastructure, sensitive documents, and unauthorized attachments remain protected. Symlinks and hardlinks are conservatively rejected.
+- Approved writes validate all preconditions before mutation, stage changes, preserve backups and competing versions, and publish the registry action last.
+- Multi-file application is **not an atomic transaction across Obsidian, sync tools, or other editors**. Existing destinations can be briefly absent during publication. See [write-safety.md](docs/write-safety.md) for precise guarantees and recovery behavior.
+- Retry an interrupted batch only through its recorded approval and recovery path. Divergent content requires a newly reviewed proposal; do not overwrite newer files with backups.
+- Use `rebuild` for search reconstruction. Do not delete all state: pending proposals, approvals, and recovery history are not disposable caches. Automated retention/expiry is not configured.
+- Keep local configuration, keys, key exports, approval receipts, databases, extracted text, proposal artifacts, and backups out of Git. Runtime state can contain complete private source text. `.gitignore` covers common local artifacts but cannot replace review of staged changes.
+
+The committed examples use empty values/placeholders; tests generate disposable keys at runtime. Host-build fingerprints are checksums of application files, not approval keys.
+
+## Development and validation
+
+```sh
+uv sync --locked
+uv run pytest -q
+uv run ruff check src tests examples
+uv run ruff format --check src tests examples
+
+# Optional native review tests on macOS:
+bash approval-app/test.sh
+
+# Synthetic measurements; these do not establish production accuracy or savings.
+uv run python examples/evaluate.py --output /tmp/vault-evaluation.json
+uv run python examples/benchmark_intake.py --output /tmp/vault-intake-benchmark.json
+```
+
+Tests cover exclusions, incremental indexing, extraction reuse, response budgets, stale evidence, registry preservation, approved creation/update, conflicting edits, interruption/retry, hook matching, and unchanged-run silence. Real-corpus acceptance still requires representative labeled tasks and complete agent traces; see the [evaluation procedure](docs/connection-and-evaluation.md#measure-actual-benefit).
+
+## Project layout
+
+```text
+src/vault_retrieval/
+  cli.py                 CLI and bounded operation dispatch
+  config.py              Eligibility and safe file access
+  service.py             Inventory, indexing, and retrieval
+  extract.py             Local extraction and cached artifacts
+  store.py               SQLite state and coordination
+  coordinator.py         Intake, proposals, and approved batches
+  registry.py             Processing-log compatibility
+  writes.py              Publication and recovery
+  hook*.py               Desktop approval integration
+  approval.py            Signed-receipt verification and export
+approval-app/            Optional native macOS review/signing app
+examples/                Configuration templates and synthetic evaluations
+tests/                   Isolated regression tests
+docs/                   Setup, integration, evidence, and design notes
+```
+
+## Documentation
+
+- [Product requirements](prd.md) and [original architecture proposal](architecture-proposal.md)
+- [Agent integration and plan schema](docs/host-integration.md)
+- [Hook activation and troubleshooting](docs/hook-approval-setup.md)
+- [Complete heartbeat prompt](docs/heartbeat-prompt.md)
+- [Native approval app](docs/approval-adapter.md)
+- [Write safety and recovery](docs/write-safety.md)
+- [Implementation status](docs/implementation-status.md)
+- [Code-quality and intake performance review](docs/code-quality-review.md)
+
+Some design and deployment notes preserve historical decisions. For current installation steps, start with this README and the hook activation guide.
+
+## Scope and licensing
+
+This is a single-user local tool, not a hosted service or Obsidian plugin. Embeddings, autonomous note writing, generalized multi-user support, and automatic source reorganization are outside the current scope. Additional search complexity should be justified by measured retrieval failures.
+
+No project license has been declared. Dependencies retain their own licenses; PyMuPDF is distributed under AGPL/commercial terms. Consult dependency licensing before redistribution.

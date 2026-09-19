@@ -14,6 +14,7 @@ def test_scheduled_end_to_end(env):
     original = service.config.read("Study/Raw/Capture.md")
     first = coordinator.run_intake()
     assert first["needs_planning"]
+    service.extract_documents([item["document_id"] for item in first["pending"]])
     run = coordinator.run_intake(plan_for(service))
     ident = run["proposal_id"]
     assert len(run["notifications"]) == 1

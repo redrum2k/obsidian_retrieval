@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/nikitaafanaskin/Documents/Developer/obsidian_retrieval/.venv/bin/python -m vault_retrieval.hook --config /Users/nikitaafanaskin/Documents/Developer/obsidian_retrieval/config.local.json",
+            "timeout": 10,
+            "statusMessage": "Checking explicit vault batch approval"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,4 +1,3 @@
-import base64
 import difflib
 import json
 import os
@@ -7,9 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-
+from .approval import verify_receipt
 from .common import VaultError, canonical, digest, now
 from .registry import Registry
 from .writes import captured_hash, check_filesystem, publish, recover_publication
@@ -33,7 +30,7 @@ class Coordinator:
     def pending(self):
         rows = self.db.execute("""SELECT d.*,w.state,w.proposal_id FROM work w
             JOIN documents d ON d.id=w.document_id AND d.hash=w.revision
-            WHERE d.active=1 AND d.status IN ('ready','awaiting_grounding') AND w.state IN ('pending','blocked') AND w.proposal_id IS NULL
+            WHERE d.active=1 AND d.status IN ('ready','awaiting_grounding','needs_extraction','failed') AND w.state IN ('pending','blocked') AND w.proposal_id IS NULL
             ORDER BY CASE WHEN d.role IN ('raw','glossary') THEN 0 ELSE 1 END,d.path""")
         return [
             {
@@ -49,7 +46,7 @@ class Coordinator:
 
     def run_intake(self, plan=None):
         with self.store.lock():
-            refresh = self.service.refresh(locked=True)
+            refresh = self.service.refresh(locked=True, extraction_paths=set())
             self.supersede()
             proposal = self.propose(plan, locked=True) if plan else None
             # Existing host delivers these artifacts in the current conversation and ACKs them.
@@ -318,6 +315,7 @@ class Coordinator:
         )
         body = {
             "id": batch_id,
+            "review_context": {"vault": str(self.config.vault)},
             "config": self.config.revision,
             "sources": sources,
             "actions": actions,
@@ -393,8 +391,30 @@ class Coordinator:
                         "broken_link", "A proposed wiki link has no eligible unambiguous target."
                     )
 
-    def acknowledge(self, proposal_id):
+    def acknowledge(self, proposal_id, session_id=None):
+        if self.config.data.get("approval_scheme") == "codex-hook":
+            expected = self.config.data.get("hook_approval", {}).get("session_id")
+            if not expected or session_id != expected:
+                raise VaultError(
+                    "invalid_session", "Acknowledge delivery in the configured conversation."
+                )
+        row = self.db.execute(
+            "SELECT body FROM proposals WHERE id=? AND state='pending'", (proposal_id,)
+        ).fetchone()
+        if not row:
+            raise VaultError("not_found", "No pending proposal to acknowledge.")
         with self.db:
+            if session_id:
+                self.db.execute(
+                    "INSERT OR REPLACE INTO proposal_deliveries VALUES (?,?,?,?,?)",
+                    (
+                        proposal_id,
+                        session_id,
+                        digest(row["body"].encode()),
+                        self.config.revision,
+                        now(),
+                    ),
+                )
             result = self.db.execute(
                 "UPDATE proposals SET delivery='confirmed' WHERE id=? AND state='pending'",
                 (proposal_id,),
@@ -403,25 +423,6 @@ class Coordinator:
             raise VaultError("not_found", "No pending proposal to acknowledge.")
         return {"id": proposal_id, "delivery": "confirmed"}
 
-    def verify_approval(self, body, receipt):
-        key = self.config.data.get("approval_public_key")
-        expected = {
-            "proposal_id": body["id"],
-            "proposal_digest": digest(canonical(body).encode()),
-            "decision": "approve",
-        }
-        if not key or receipt.get("message") != expected:
-            raise VaultError(
-                "approval_required",
-                "A trusted approval receipt bound to this exact proposal is required.",
-            )
-        try:
-            Ed25519PublicKey.from_public_bytes(base64.b64decode(key)).verify(
-                base64.b64decode(receipt["signature"]), canonical(expected).encode()
-            )
-        except (InvalidSignature, ValueError, KeyError) as exc:
-            raise VaultError("approval_required", "Approval receipt signature is invalid.") from exc
-
     def apply(self, proposal_id, receipt, fail_after=None):
         with self.store.lock():
             self.service.check_policy()
@@ -429,7 +430,7 @@ class Coordinator:
             if not row:
                 raise VaultError("not_found", "Proposal does not exist.")
             body = json.loads(row["body"])
-            self.verify_approval(body, receipt)
+            verify_receipt(self.config, body, receipt, self.db)
             if row["state"] == "completed":
                 return {"id": proposal_id, "state": "completed", "already_applied": True}
             if row["state"] == "superseded" or body["config"] != self.config.revision:
@@ -527,7 +528,7 @@ class Coordinator:
                 self.db.execute(
                     "UPDATE work SET state='completed' WHERE proposal_id=?", (proposal_id,)
                 )
-            self.service.refresh(locked=True)
+            self.service.refresh(locked=True, extraction_paths=set())
             return {
                 "id": proposal_id,
                 "state": "completed",

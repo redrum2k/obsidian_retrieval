@@ -5,13 +5,13 @@ import subprocess
 import time
 import uuid
 import zipfile
+from functools import cached_property
 from pathlib import Path
 
 import yaml
 from lxml.etree import XMLSyntaxError
 
 from .common import VaultError, canonical, digest, now
-from .extract import Extractor
 from .registry import Registry
 from .store import Store
 
@@ -28,7 +28,12 @@ class Service:
         self.store = Store(config.state)
         self.db = self.store.db
         self.warnings = []
-        self.extractor = Extractor(config.state, config.data.get("extraction"))
+
+    @cached_property
+    def extractor(self):
+        from .extract import Extractor
+
+        return Extractor(self.config.state, self.config.data.get("extraction"))
 
     def check_policy(self):
         policy = self.config.data.get("policy")
@@ -46,12 +51,14 @@ class Service:
         self.db.execute("DELETE FROM sections WHERE document_id=?", (ident,))
         self.db.execute("DELETE FROM links WHERE document_id=?", (ident,))
 
-    def refresh(self, full=False, rebuild=False, locked=False):
+    def refresh(self, full=False, rebuild=False, locked=False, extraction_paths=None):
+        """Reconcile inventory; None extracts all, a path set extracts only its members."""
         if not locked:
             with self.store.lock():
-                return self.refresh(full, rebuild, True)
+                return self.refresh(full, rebuild, True, extraction_paths)
         self.check_policy()
         start = time.monotonic()
+        extractor_version = self.extractor.version if extraction_paths != set() else None
         registry = Registry(self.config)
         paths = self.config.inventory()
         previous = {
@@ -66,7 +73,8 @@ class Service:
             "failed": 0,
         }
         policy_changed = self.store.meta("config") != self.config.revision
-        registry_changed = self.store.meta("registry") != registry.hash
+        registry_hash = registry.hash or "absent"
+        registry_changed = self.store.meta("registry") != registry_hash
         full = full or policy_changed or registry_changed or rebuild
         new_hashes = {p: digest(self.config.read(p)) for p in paths if p not in previous}
         with self.db:
@@ -76,13 +84,14 @@ class Service:
                 role, project = self.config.classify(path)
                 if path in registry.generated:
                     role = "generated"
+                extract = extraction_paths is None or path in extraction_paths
                 if (
                     not full
                     and old
                     and old["size"] == info.st_size
                     and old["mtime"] == info.st_mtime_ns
-                    and old["status"] != "failed"
-                    and old["extractor"] == self.extractor.version
+                    and (not extract or old["status"] not in {"failed", "needs_extraction"})
+                    and (not extract or old["extractor"] == extractor_version)
                 ):
                     continue
                 try:
@@ -123,16 +132,36 @@ class Service:
                 )
                 record = registry.record(path)
                 unknown_grounding = self.needs_admission(path, role, record)
-                result = {"metadata": {}, "warnings": [], "sections": []}
-                key, status = (
-                    None,
+                admission_status = (
                     "context_only"
                     if context
                     else "awaiting_grounding"
                     if unknown_grounding
-                    else "ready",
+                    else "ready"
                 )
-                if not context and not unknown_grounding:
+                if (
+                    old
+                    and old["path"] == path
+                    and old["hash"] == revision
+                    and old["role"] == role
+                    and not policy_changed
+                    and not rebuild
+                    and old["status"] == admission_status
+                    and (not extract or old["extractor"] == extractor_version)
+                ):
+                    self.db.execute(
+                        "UPDATE documents SET size=?,mtime=? WHERE id=?",
+                        (len(data), info.st_mtime_ns, ident),
+                    )
+                    self.update_work(ident, path, revision, role, old["status"], registry)
+                    continue
+                result = {"metadata": {}, "warnings": [], "sections": []}
+                key, status = None, admission_status
+                if status == "ready" and not extract:
+                    status = "needs_extraction"
+                    if old and old["hash"] == revision:
+                        key = old["cache_key"]
+                if status == "ready":
                     try:
                         result, hit, key = self.extractor.extract(data, Path(path).suffix.lower())
                         counts["cache_hits" if hit else "extracted"] += 1
@@ -174,14 +203,10 @@ class Service:
                         status,
                         canonical(result["warnings"]),
                         key,
-                        self.extractor.version,
+                        extractor_version or (old["extractor"] if old else "unextracted"),
                     ),
                 )
-                if (
-                    Path(path).suffix.lower() in {".md", ".markdown"}
-                    and not context
-                    and not unknown_grounding
-                ):
+                if Path(path).suffix.lower() in {".md", ".markdown"} and status == "ready":
                     text = data.decode("utf-8")
                     targets = set(re.findall(r"\[\[([^\]|#]+)", text))
                     targets.update(re.findall(r"\]\(([^)#]+)(?:#[^)]*)?\)", text))
@@ -217,34 +242,7 @@ class Service:
                         "INSERT INTO events(document_id,path,project,revision,reason,observed) VALUES (?,?,?,?,?,?)",
                         (ident, path, project, revision, reason, now()),
                     )
-                if role in {"raw", "glossary", "study", "inbox"}:
-                    state = (
-                        "completed"
-                        if registry.completed(path, revision)
-                        else "blocked"
-                        if status != "ready"
-                        else "pending"
-                    )
-                    record = registry.record(path, revision)
-                    if record.get("status") == "awaiting_content" or not any(
-                        re.sub(r"(?m)^#{1,6}.*$", "", section["text"]).strip()
-                        for section in result["sections"]
-                    ):
-                        state = "awaiting_content" if status == "ready" else "blocked"
-                    self.db.execute(
-                        "INSERT OR IGNORE INTO work VALUES (?,?,?,NULL)", (ident, revision, state)
-                    )
-                    if state == "completed":
-                        self.db.execute(
-                            "UPDATE work SET state='completed' WHERE document_id=? AND revision=?",
-                            (ident, revision),
-                        )
-                    else:
-                        self.db.execute(
-                            "UPDATE work SET state=? WHERE document_id=? AND revision=? "
-                            "AND proposal_id IS NULL AND state IN ('blocked','pending','awaiting_content')",
-                            (state, ident, revision),
-                        )
+                self.update_work(ident, path, revision, role, status, registry)
                 self.db.execute(
                     "UPDATE work SET state='superseded' WHERE document_id=? AND revision<>? AND state<>'completed'",
                     (ident, revision),
@@ -274,13 +272,14 @@ class Service:
             if full:
                 self.store.meta("last_reconciliation", now())
             self.store.meta("config", self.config.revision)
-            self.store.meta("registry", registry.hash or "absent")
+            self.store.meta("registry", registry_hash)
             for metric in ("extracted", "cache_hits"):
                 self.store.count(metric, counts[metric])
         referenced = {
             r[0] for r in self.db.execute("SELECT cache_key FROM documents WHERE active=1")
         }
-        for folder in self.extractor.cache.iterdir():
+        cache = self.config.state / "extractions"
+        for folder in cache.iterdir() if cache.exists() else ():
             if folder.name not in referenced:
                 shutil.rmtree(folder)
         return {
@@ -288,6 +287,54 @@ class Service:
             "duration_ms": round((time.monotonic() - start) * 1000),
             "snapshot": self.snapshot(),
         }
+
+    def update_work(self, ident, path, revision, role, status, registry):
+        if role not in {"raw", "glossary", "study", "inbox"}:
+            self.db.execute(
+                "UPDATE work SET state='superseded' WHERE document_id=? AND state<>'completed'",
+                (ident,),
+            )
+            return
+        if registry.completed(path, revision):
+            state = "completed"
+        elif status == "needs_extraction":
+            state = "pending"
+        elif status != "ready":
+            state = "blocked"
+        else:
+            text = self.db.execute("SELECT text FROM sections WHERE document_id=?", (ident,))
+            has_content = any(re.sub(r"(?m)^#{1,6}.*$", "", row[0]).strip() for row in text)
+            empty = (
+                registry.record(path, revision).get("status") == "awaiting_content"
+                or not has_content
+            )
+            state = "awaiting_content" if empty else "pending"
+        self.db.execute("INSERT OR IGNORE INTO work VALUES (?,?,?,NULL)", (ident, revision, state))
+        if state == "completed":
+            self.db.execute(
+                "UPDATE work SET state=? WHERE document_id=? AND revision=?",
+                (state, ident, revision),
+            )
+        else:
+            self.db.execute(
+                "UPDATE work SET state=? WHERE document_id=? AND revision=? "
+                "AND proposal_id IS NULL AND state IN ('blocked','pending','awaiting_content')",
+                (state, ident, revision),
+            )
+
+    def extract_documents(self, ids):
+        if not ids or len(ids) > 20:
+            raise VaultError("invalid_input", "Select 1..20 document IDs for extraction.")
+        paths = set()
+        for ident in ids:
+            doc = self.db.execute(
+                "SELECT * FROM documents WHERE id=? AND active=1", (ident,)
+            ).fetchone()
+            if not doc:
+                raise VaultError("not_found", "A selected document is missing; rerun intake.")
+            self.config.check(doc["path"])
+            paths.add(doc["path"])
+        return self.refresh(extraction_paths=paths)
 
     def snapshot(self):
         return {
@@ -321,9 +368,9 @@ class Service:
         data = self.config.read(doc["path"])
         if digest(data) != doc["hash"]:
             raise VaultError("stale_revision", "Refresh before reading changed evidence.")
-        if Registry(self.config).context_only(doc["path"]) and doc[
-            "path"
-        ] not in self.config.data.get("integration_permissions", {}):
+        if registry.context_only(doc["path"]) and doc["path"] not in self.config.data.get(
+            "integration_permissions", {}
+        ):
             raise VaultError(
                 "context_only", "This source is metadata-only under the processing registry."
             )

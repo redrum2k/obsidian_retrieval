@@ -128,7 +128,27 @@ class Config:
 
     @classmethod
     def load(cls, path):
-        return cls(json.loads(Path(path).read_text()))
+        try:
+            raw = Path(path).expanduser().read_text()
+        except FileNotFoundError as exc:
+            raise VaultError(
+                "config_not_found",
+                "The --config file does not exist. Copy examples/live-config.proposed.json "
+                "to config.local.json, review its scope, then set enabled to true before indexing. "
+                "Validate with: vault --config config.local.json validate",
+            ) from exc
+        except OSError as exc:
+            raise VaultError(
+                "config_unreadable",
+                "Cannot read the --config file; check its path and permissions.",
+            ) from exc
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise VaultError("invalid_config", "The --config file is not valid JSON.") from exc
+        if not isinstance(data, dict):
+            raise VaultError("invalid_config", "The --config file must contain a JSON object.")
+        return cls(data)
 
     def relative(self, name):
         path = Path(name)

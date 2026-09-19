@@ -39,6 +39,14 @@ CREATE TABLE IF NOT EXISTS proposals(
 CREATE TABLE IF NOT EXISTS actions(
  proposal_id TEXT, ordinal INTEGER, state TEXT, PRIMARY KEY(proposal_id,ordinal)
 );
+CREATE TABLE IF NOT EXISTS proposal_deliveries(
+ proposal_id TEXT, session_id TEXT, body_digest TEXT, config_revision TEXT,
+ delivered_at TEXT, PRIMARY KEY(proposal_id,session_id)
+);
+CREATE TABLE IF NOT EXISTS hook_approvals(
+ event_id TEXT PRIMARY KEY, session_id TEXT, turn_id TEXT, proposal_id TEXT,
+ body_digest TEXT, config_revision TEXT, created TEXT, UNIQUE(session_id,turn_id)
+);
 CREATE TABLE IF NOT EXISTS metrics(name TEXT PRIMARY KEY, value INTEGER NOT NULL);
 """
 

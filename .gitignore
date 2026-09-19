@@ -4,3 +4,33 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 config.local.json
+approval-app/.build/
+approval-app/build/
+docs/hook-activation-local.md
+
+# Local credentials and approval artifacts (including public-key exports).
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.enclave
+public-key.json
+*.receipt.json
+receipt.json
+config.*.local.json
+
+# Private runtime data and local exports.
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+state/
+.vault-state/
+approval-requests/
+proposals/
+backups/
+write-recovery/
+.DS_Store
