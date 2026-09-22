@@ -62,6 +62,16 @@
       "path": "Research/Van Alstyn",
       "role": "study",
       "project": "Van Alstyn"
+    },
+    {
+      "path": "Personal/Raw",
+      "role": "raw",
+      "project": "Winter Break"
+    },
+    {
+      "path": "Personal/Winter Break",
+      "role": "generated",
+      "project": "Winter Break"
     }
   ],
   "exclude": [
@@ -106,7 +116,8 @@
     "Fall_2026/CS330/Concepts",
     "Research/King/Notes",
     "Research/CheYu Lee/Notes",
-    "Research/Van Alstyn/Notes"
+    "Research/Van Alstyn/Notes",
+    "Personal/Winter Break"
   ],
   "companion_roots": [
     "Fall_2026/RN103/Raw",
@@ -149,7 +160,7 @@
   "approval_public_key": null,
   "policy": {
     "path": "AGENTS.md",
-    "sha256": "56705d66650464e2d91b92151d267c3f2730c6ea1616c9457d4c2b9704f73aa6"
+    "sha256": "9d3bf3104dad3f0e727ec249e767c020f64569fb029793c326cbce559b00ee4d"
   },
   "extraction": {
     "ocr_language": "eng"

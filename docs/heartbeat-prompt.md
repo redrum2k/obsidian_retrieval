@@ -1,4 +1,4 @@
-# Full replacement heartbeat prompt
+# Full replacement heartbeat prompts
 
 Use this as the complete prompt for the existing `review-incoming-vault-notes`
 heartbeat after the hook contract is validated and activated. Preserve the

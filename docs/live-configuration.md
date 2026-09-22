@@ -49,3 +49,21 @@ Admission allows cached extraction and evidence retrieval, not an authorship cla
 4. Run the owner-labeled baseline and held-out evaluation before declaring the PRD's release targets met.
 
 The existing `review-incoming-vault-notes` heartbeat is unchanged. No duplicate scheduler, notification channel, live index, or live study-note write has been created.
+
+## Personal / Winter Break
+
+The owner added two sibling folders on September 19, 2026. The configured project
+`Winter Break` reads eligible inputs from `Personal/Raw` and proposes derived
+Markdown in `Personal/Winter Break`. Only these two roots are admitted, not all
+of Personal. The output root has role `generated` and is excluded from new-source
+intake. Existing Raw-format admission rules already apply. The vault AGENTS.md
+records this routing; the heartbeat reads it on each run, so its prompt needs no
+additional edit. Originals, source-grounding checks, exclusions and exact-batch
+approval remain in force. No contents were processed during setup.
+
+To add another area, add an explicit input root and a generated output root to
+`roots`, add the destination to `outputs`, and record the routing in the current
+vault policy. Review any policy changes before updating its pinned hash. Extend
+`input_rules` only if the new source paths/formats do not match existing rules.
+Validate configuration and classification before intake. Configuration changes
+invalidate unapplied proposals; request a fresh reviewed batch afterward.
