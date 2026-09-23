@@ -47,7 +47,20 @@ uv run --project /Users/nikitaafanaskin/Documents/Developer/obsidian_retrieval v
 Use the same absolute --project and --config paths for subsequent vault commands.
 Do not run refresh --full as part of a routine scheduled check. Intake discovers
 and hashes inputs without doing extraction. Page pending work and all necessary
-continuations. Check changed Raw and configured glossary inputs first, then
+continuations before starting extraction or proposing changes. Keep the complete
+source-ID/revision list for this pass; the first page is not the whole queue.
+Extraction, intake, refresh, and proposal changes can invalidate pending cursors.
+If a cursor expires, restart pending pagination and deduplicate by ID/revision;
+never interpret an expired cursor as an empty queue.
+Serialize mutating CLI operations: a busy error means retry after the current
+operation completes, not that there is no work. Concurrent analysis may produce
+draft plan fragments, but consolidate them before proposing. Each proposal includes
+the shared processing log, so applying one can invalidate another even when their
+note targets differ; replan and obtain fresh approval for invalidated proposals.
+Account for every collected source as proposed, already covered, blocked with a
+specific reason, or deferred and still pending. A single successful batch does
+not mean the intake queue is complete.
+Check changed Raw and configured glossary inputs first, then
 eligible study documents outside Raw during the same check, including documents,
 slides, lectures, presentations, and assignments. Include current and future CS
 course study documents only within authorized configuration; preserve CS project

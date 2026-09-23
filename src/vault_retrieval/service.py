@@ -144,14 +144,13 @@ class Service:
                     and old["path"] == path
                     and old["hash"] == revision
                     and old["role"] == role
-                    and not policy_changed
                     and not rebuild
                     and old["status"] == admission_status
                     and (not extract or old["extractor"] == extractor_version)
                 ):
                     self.db.execute(
-                        "UPDATE documents SET size=?,mtime=? WHERE id=?",
-                        (len(data), info.st_mtime_ns, ident),
+                        "UPDATE documents SET size=?,mtime=?,project=? WHERE id=?",
+                        (len(data), info.st_mtime_ns, project, ident),
                     )
                     self.update_work(ident, path, revision, role, old["status"], registry)
                     continue
@@ -318,7 +317,8 @@ class Service:
         else:
             self.db.execute(
                 "UPDATE work SET state=? WHERE document_id=? AND revision=? "
-                "AND proposal_id IS NULL AND state IN ('blocked','pending','awaiting_content')",
+                "AND proposal_id IS NULL "
+                "AND state IN ('blocked','pending','awaiting_content','superseded')",
                 (state, ident, revision),
             )
 

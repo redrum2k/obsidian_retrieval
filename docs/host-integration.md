@@ -15,6 +15,25 @@ The selected interface is the `vault` CLI. There is no MCP server or new schedul
 5. Fetch `notifications`. Post the full review artifact or an accessible complete diff in the existing conversation with the stable proposal ID. Call `acknowledge --id ID` only after delivery. Deduplicate by proposal ID. Failed/ambiguous deliveries remain unconfirmed; no exactly-once claim is made if the host cannot atomically post and acknowledge.
 6. Stop for the owner's explicit response. An unchanged pending proposal or no new work warrants no user-facing message. Operational failures may use the existing automation's failure reporting. No silence/timeout/schedule event approves writing.
 
+## Queue completeness and concurrency
+
+Drain all `pending` continuations before extracting or proposing. Default pages
+contain at most eight items. Retain the collected IDs and revisions for the pass.
+Mutation changes the snapshot or pending results and can expire a cursor; restart
+pagination and deduplicate IDs/revisions on `expired_cursor`.
+
+Mutating operations use a nonblocking exclusive lock. Serialize them and retry
+`busy` after the active operation finishes. Concurrent analysis can produce plan
+fragments, but consolidate them into a reviewed batch. All proposals replace the
+same processing log, so separate proposals can conflict even with disjoint note
+targets. Replan against the current registry and obtain fresh approval after such
+a conflict; never merge or rebase an approved registry diff silently.
+
+Account for each collected source as proposed, already covered, blocked with a
+reason, or deferred and still pending. One completed batch is not a completed
+queue. `awaiting_grounding` may indicate an unconfigured input shape, not a parser
+failure; discovery and authorship/processing permission are separate checks.
+
 ## Concrete plan schema
 
 ```json

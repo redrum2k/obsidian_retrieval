@@ -69,3 +69,37 @@ def test_discovery_respects_registry_revocation(env):
     assert Coordinator(service).pending() == []
     with pytest.raises(VaultError):
         service.extract_documents(["missing"])
+
+
+def test_config_change_preserves_unchanged_extraction(env, monkeypatch):
+    service, _, data = env
+    service.refresh()
+    before = [tuple(r) for r in service.db.execute("SELECT * FROM sections")]
+    data["roots"][0]["project"] = "renamed project"
+    other = Service(Config(data))
+    try:
+
+        def forbidden(*args, **kwargs):
+            pytest.fail("Discovery must reuse extraction without constructing an extractor")
+
+        monkeypatch.setattr(Extractor, "__init__", forbidden)
+        pending = Coordinator(other).run_intake()["pending"]
+        assert pending[0]["status"] == "ready"
+        assert [tuple(r) for r in other.db.execute("SELECT * FROM sections")] == before
+        assert other.db.execute("SELECT project FROM documents").fetchone()[0] == "renamed project"
+    finally:
+        other.store.close()
+
+
+def test_reverted_source_revision_returns_to_pending(env):
+    service, _, _ = env
+    path = service.config.vault / "Study/Raw/Capture.md"
+    original = path.read_text()
+    coordinator = Coordinator(service)
+    first = coordinator.run_intake()["pending"][0]
+    path.write_text("# Temporary revision\nChanged content\n")
+    coordinator.run_intake()
+    path.write_text(original)
+    pending = coordinator.run_intake()["pending"]
+    assert len(pending) == 1
+    assert pending[0]["revision"] == first["revision"]
