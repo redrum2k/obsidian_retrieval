@@ -56,6 +56,34 @@ class Config:
         for key in ("vault", "state", "roots", "exclude", "outputs", "processing_log"):
             if key not in data:
                 raise VaultError("invalid_config", f"Missing {key}; see examples/config.json.")
+        permissions = data.get("resource_inventory_permissions", {})
+        if not isinstance(permissions, dict):
+            raise VaultError("invalid_config", "Resource inventory permissions must be a mapping.")
+        for ident, permission in permissions.items():
+            if (
+                not isinstance(ident, str)
+                or not ident.strip()
+                or not isinstance(permission, dict)
+                or not isinstance(permission.get("instruction"), str)
+                or not permission["instruction"].strip()
+            ):
+                raise VaultError(
+                    "invalid_config", "Inventory authorization needs an ID and user instruction."
+                )
+            for field in ("sources", "outputs"):
+                names = permission.get(field)
+                if (
+                    not isinstance(names, list)
+                    or not names
+                    or any(
+                        not isinstance(name, str) or any(c in name for c in "*?[") for name in names
+                    )
+                ):
+                    raise VaultError(
+                        "invalid_config", "Inventory scope requires exact source/output paths."
+                    )
+                for name in names:
+                    self.relative(name)
         self.vault = Path(data["vault"]).expanduser().resolve(strict=True)
         self.state = Path(data["state"]).expanduser().resolve()
         if under(self.state, self.vault) or under(self.vault, self.state):

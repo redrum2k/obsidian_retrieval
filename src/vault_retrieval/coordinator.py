@@ -117,6 +117,22 @@ class Coordinator:
             )
         if len(plan["sources"]) > 20 or len(plan["changes"]) > 20:
             raise VaultError("invalid_plan", "A batch supports at most 20 sources and 20 changes.")
+        purpose = plan.get("purpose", "study_notes")
+        if purpose not in {"study_notes", "resource_inventory"}:
+            raise VaultError("invalid_plan", "Unknown proposal purpose.")
+        authorization = None
+        if purpose == "resource_inventory":
+            authorization = self.config.data.get("resource_inventory_permissions", {}).get(
+                plan.get("authorization_id")
+            )
+            if not authorization:
+                raise VaultError(
+                    "ungrounded", "Resource inventory needs a configured scoped authorization."
+                )
+            if any(c["path"] not in authorization["outputs"] for c in plan["changes"]):
+                raise VaultError(
+                    "ungrounded", "Output is outside resource-inventory authorization."
+                )
         for source in plan["sources"]:
             doc = self.db.execute(
                 "SELECT * FROM documents WHERE id=? AND active=1", (source["id"],)
@@ -128,7 +144,11 @@ class Coordinator:
                 raise VaultError(
                     "ungrounded", "Generated, scaffold, or failed sources cannot initiate work."
                 )
-            if registry.completed(doc["path"], doc["hash"]):
+            if authorization and doc["path"] not in authorization["sources"]:
+                raise VaultError(
+                    "ungrounded", "Source is outside resource-inventory authorization."
+                )
+            if registry.completed(doc["path"], doc["hash"], purpose):
                 raise VaultError(
                     "already_processed", "This revision is already recorded as processed."
                 )
@@ -137,7 +157,8 @@ class Coordinator:
             known_user = doc["path"] in self.config.data.get("user_note_paths", [])
             related = grounding.get("user_note_sources", [])
             if (
-                not explicit
+                purpose == "study_notes"
+                and not explicit
                 and not known_user
                 and not related
                 and not grounding.get("user_authored_evidence")
@@ -231,6 +252,8 @@ class Coordinator:
         batch_id = digest(
             canonical(
                 {
+                    "purpose": purpose,
+                    "authorization": authorization,
                     "sources": sources,
                     "actions": actions,
                     "registry": registry.hash,
@@ -245,7 +268,8 @@ class Coordinator:
             return {"id": batch_id, "state": existing["state"]}
         for source in sources:
             reserved = self.db.execute(
-                "SELECT proposal_id FROM work WHERE document_id=? AND revision=?",
+                "SELECT proposal_id FROM work WHERE document_id=? AND revision=? "
+                "AND state<>'completed'",
                 (source["id"], source["revision"]),
             ).fetchone()
             if reserved and reserved[0]:
@@ -253,10 +277,12 @@ class Coordinator:
                     "pending_proposal", "An unchanged proposal already covers this source revision."
                 )
         records = registry.data
+        collection = "inventory_sources" if purpose == "resource_inventory" else "sources"
         for source in sources:
-            old = next((s for s in records.get("sources", []) if s["path"] == source["path"]), {})
+            old = next((s for s in records.get(collection, []) if s["path"] == source["path"]), {})
             record = {
                 **old,
+                "purpose": purpose,
                 "path": source["path"],
                 "sha256": source["revision"],
                 "status": "processed",
@@ -270,8 +296,8 @@ class Coordinator:
                 "coverage": plan.get("coverage", "Approved proposal; see batch record"),
                 "proposal_id": batch_id,
             }
-            records["sources"] = [
-                s for s in records.get("sources", []) if s["path"] != source["path"]
+            records[collection] = [
+                s for s in records.get(collection, []) if s["path"] != source["path"]
             ] + [record]
         existing_generated = {g["path"]: g for g in records.get("generated_files", [])}
         records["generated_files"] = [
@@ -301,7 +327,12 @@ class Coordinator:
             for a in actions
         ]
         records.setdefault("completed_batches", []).append(
-            {"proposal_id": batch_id, "status": "completed", "outputs": sorted(paths)}
+            {
+                "proposal_id": batch_id,
+                "purpose": purpose,
+                "status": "completed",
+                "outputs": sorted(paths),
+            }
         )
         log_text = json.dumps(records, ensure_ascii=False, indent=2) + "\n"
         actions.append(
@@ -315,6 +346,8 @@ class Coordinator:
         )
         body = {
             "id": batch_id,
+            "purpose": purpose,
+            "authorization": authorization,
             "review_context": {"vault": str(self.config.vault)},
             "config": self.config.revision,
             "sources": sources,
@@ -327,6 +360,15 @@ class Coordinator:
         review = (
             f"# Processing proposal {batch_id}\n\nNo vault changes until explicit approval.\n\n"
         )
+        review += f"Purpose: {purpose}\n\n"
+        if authorization:
+            review += (
+                "## Scoped authorization\n\n```json\n" + canonical(authorization) + "\n```\n\n"
+            )
+            review += (
+                "Inventory only: attributed descriptions, links, explicit tasks and questions. "
+            )
+            review += "Linked papers are not read or summarized; suggestions must be labeled.\n\n"
         review += (
             "## Sources and grounding\n\n```json\n"
             + json.dumps(sources, ensure_ascii=False, indent=2)
@@ -356,7 +398,7 @@ class Coordinator:
                 "INSERT INTO proposals(id,body,state,created) VALUES (?,?,'pending',?)",
                 (batch_id, canonical(body), now()),
             )
-            for source in sources:
+            for source in sources if purpose == "study_notes" else []:
                 self.db.execute(
                     "INSERT OR REPLACE INTO work VALUES (?,?,'proposed',?)",
                     (source["id"], source["revision"], batch_id),

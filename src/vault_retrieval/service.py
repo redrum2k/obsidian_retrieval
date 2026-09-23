@@ -487,6 +487,17 @@ class Service:
                     "context_only": registry.context_only(doc["path"]),
                     "user_note_sources": record.get("user_note_sources", []),
                     "outputs": record.get("outputs", []),
+                    "resource_inventory": {
+                        "completed": registry.completed(
+                            doc["path"], doc["hash"], "resource_inventory"
+                        ),
+                        "outputs": [
+                            output
+                            for row in registry.data.get("inventory_sources", [])
+                            if row["path"] == doc["path"] and row.get("sha256") == doc["hash"]
+                            for output in row.get("outputs", [])
+                        ],
+                    },
                     "work": dict(work) if work else None,
                 }
             )

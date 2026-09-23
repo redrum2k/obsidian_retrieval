@@ -28,7 +28,7 @@ class Registry:
             raise VaultError(
                 "invalid_registry", "Unsupported registry schema; no migration is automatic."
             )
-        for collection in ("sources", "generated_files"):
+        for collection in ("sources", "generated_files", "inventory_sources"):
             rows = self.data.get(collection, [])
             if not isinstance(rows, list) or any(
                 not isinstance(row, dict) or not isinstance(row.get("path"), str) for row in rows
@@ -49,7 +49,7 @@ class Registry:
                 raise VaultError("invalid_registry", f"{field} must be a list of records.")
         self.sources = {s["path"]: s for s in self.data.get("sources", [])}
         self.generated = {s["path"] for s in self.data.get("generated_files", [])}
-        for source in self.sources.values():
+        for source in [*self.sources.values(), *self.data.get("inventory_sources", [])]:
             self.generated.update(p for p in source.get("outputs", []) if p != source["path"])
         for setup in self.data.get("workspace_setups", []):
             if setup.get("scaffolding_not_study_evidence"):
@@ -67,7 +67,14 @@ class Registry:
         s = self.record(path)
         return s.get("status") == "context_only" or s.get("note_creation_allowed") is False
 
-    def completed(self, path, revision):
+    def completed(self, path, revision, purpose="study_notes"):
+        if purpose == "resource_inventory":
+            return any(
+                row["path"] == path
+                and row.get("sha256") == revision
+                and row.get("status") == "processed"
+                for row in self.data.get("inventory_sources", [])
+            )
         s = self.record(path, revision)
         return (
             bool(s)

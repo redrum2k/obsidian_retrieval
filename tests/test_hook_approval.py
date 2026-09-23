@@ -293,3 +293,42 @@ def test_probe_does_not_accept_prose_or_other_events():
     assert not is_probe(
         {"hook_event_name": "UserPromptSubmit", "prompt": "Please VAULT_HOOK_PROBE"}
     )
+
+
+def test_resource_inventory_uses_same_trusted_hook(hooked):
+    service, c, ident, event = hooked
+    record_event(service, event)
+    c.apply(ident, recorded_receipt(service, ident))
+    data = copy.deepcopy(service.config.data)
+    data["user_note_paths"] = []
+    data["resource_inventory_permissions"] = {
+        "inventory": {
+            "instruction": "Organize source references only, without paper summaries.",
+            "sources": ["Study/Raw/Capture.md"],
+            "outputs": ["Study/Notes/Inventory.md"],
+        }
+    }
+    other = Service(Config(data))
+    try:
+        other.refresh()
+        plan = plan_for(other)
+        plan.update(purpose="resource_inventory", authorization_id="inventory")
+        plan["sources"][0]["outputs"] = ["Study/Notes/Inventory.md"]
+        plan["changes"][0]["path"] = "Study/Notes/Inventory.md"
+        plan["changes"][0]["content"] = (
+            "---\nstatus: draft\n---\nSource: [[Study/Raw/Capture.md]]\nResource inventory.\n"
+        )
+        coordinator = Coordinator(other)
+        proposal = coordinator.propose(plan)
+        with pytest.raises(VaultError):
+            recorded_receipt(other, proposal["id"])
+        coordinator.acknowledge(proposal["id"], "owner-session")
+        record_event(
+            other, {**event, "turn_id": "inventory-turn", "prompt": "IMPLEMENT " + proposal["id"]}
+        )
+        assert (
+            coordinator.apply(proposal["id"], recorded_receipt(other, proposal["id"]))["state"]
+            == "completed"
+        )
+    finally:
+        other.store.close()

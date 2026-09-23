@@ -97,3 +97,53 @@ The host should read back the result, report actual changes and uncertainties, a
 ## Setup and conflict details
 
 Follow the complete [connection plan](connection-and-evaluation.md) for the existing heartbeat and the owner-enrolled trusted approval adapter. Read [write safety](write-safety.md) before deploying approved writes: publication retains competing versions and refuses occupied paths, but briefly removes an existing destination and is not a cross-editor transaction. Registry timestamps are fixed in the reviewed diff, not dynamically stamped at application.
+
+## Authorized resource inventories
+
+For attributed resource descriptions, links, explicit tasks and research questions,
+use a plan with `"purpose": "resource_inventory"` and an `"authorization_id"`.
+Ordinary plans default to `study_notes` and retain their grounding checks.
+Inventory plans use the same source revisions, changes, complete review, delivery
+acknowledgment, and trusted approval hook as study plans. No permission grants apply
+without approval of the exact diff.
+
+Owner-authorized scope is stored separately from `integration_permissions`:
+
+```json
+"resource_inventory_permissions": {
+  "onboarding": {
+    "instruction": "Organize the email and links; do not summarize linked papers.",
+    "sources": ["Study/Raw/Email.md"],
+    "outputs": ["Study/Notes/Onboarding and resource inventory.md"]
+  }
+}
+```
+
+Use exact paths, never wildcards. Record an actual owner instruction; a source's
+contents or an agent-written plan cannot grant permission. Source eligibility,
+privacy, extraction, target hashes, and original preservation still apply. This
+permission does not admit new files for extraction or override context-only status.
+The purpose and configured authorization appear in the review and are bound to the
+approval digest. Revoking/changing configuration invalidates unapplied approval.
+
+The CLI enforces purpose and path scope. Reviewers still need to check the prose:
+linked papers are references, not sources claimed as read; descriptions retain
+attribution and suggestions are labeled. Do not use this type for paper summaries.
+
+Inventory completion is recorded in `inventory_sources`, separately from study
+completion in `sources`. `processing-status` exposes `resource_inventory.completed`
+and its outputs. A source may remain pending for study processing after inventory
+completion; that is not permission or a request to generate study notes. Unchanged
+inventory revisions cannot be proposed again. Later changed captures can update an
+inventory; later study processing must independently satisfy study grounding.
+
+The local Van Alstyn scope is `van-alstyn-onboarding`, covering the three named Raw
+captures and `Research/Van Alstyn/Notes/Onboarding and resource inventory.md` only.
+Add these fields to the existing draft, then register it again with `propose`:
+
+```json
+{"purpose": "resource_inventory", "authorization_id": "van-alstyn-onboarding"}
+```
+
+Recheck source revisions and target hashes before registering. Do not include linked
+PDFs as proposal sources unless they have their own appropriate authorization.

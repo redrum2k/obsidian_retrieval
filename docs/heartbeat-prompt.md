@@ -92,6 +92,12 @@ workflow and identify missing authorization when relevant. Explicitly requested
 syllabus/task extraction remains separate. Rule/log updates must stay within
 AGENTS.md permissions.
 
+For an explicitly authorized resource inventory, use purpose resource_inventory
+and the configured authorization_id described in host-integration.md. Check
+processing-status.resource_inventory before repeating an inventory. Keep inventory
+completion separate from study-note completion; never summarize linked papers
+under inventory permission or claim imported emails are user-authored notes.
+
 For newly actionable material, prepare one concrete grounded plan using the
 host-integration schema. List user-note anchors, exact source revisions, notes
 to create/update, link changes, coverage, and uncertainties. Use designated
