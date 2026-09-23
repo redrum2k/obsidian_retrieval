@@ -64,6 +64,11 @@
       "project": "Van Alstyn"
     },
     {
+      "path": "Research/Dokyun",
+      "role": "study",
+      "project": "Dokyun"
+    },
+    {
       "path": "Personal/Raw",
       "role": "raw",
       "project": "Winter Break"
@@ -117,6 +122,7 @@
     "Research/King/Notes",
     "Research/CheYu Lee/Notes",
     "Research/Van Alstyn/Notes",
+    "Research/Dokyun/Notes",
     "Personal/Winter Break"
   ],
   "companion_roots": [
@@ -128,7 +134,8 @@
     "Leetcode/Raw",
     "Research/King/Raw",
     "Research/CheYu Lee/Raw",
-    "Research/Van Alstyn/Raw"
+    "Research/Van Alstyn/Raw",
+    "Research/Dokyun/Raw"
   ],
   "glossary": [
     "Research/Shared/Glossary inbox.md",
