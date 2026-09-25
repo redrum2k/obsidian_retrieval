@@ -7,8 +7,8 @@ from .common import VaultError
 
 HOST_CONTRACT = "codex-desktop-input-v1"
 HOST_FILES = {
-    "/Applications/ChatGPT.app/Contents/Resources/codex": "9280c0754e8f1f6b72f495d30c8c82a006dbc4995bf0492916fa0901f6bfd1f9",
-    "/Applications/ChatGPT.app/Contents/Resources/app.asar": "1f7939c1c781887c167043c4d1d307af3400d324685cfc315dfe2f80e634f483",
+    "/Applications/ChatGPT.app/Contents/Resources/codex": "93169e745735930598e867ad837abf3fdc50774a3ad7e7aa89c0d0c51b0189a5",
+    "/Applications/ChatGPT.app/Contents/Resources/app.asar": "03108a728bdb1616958ab89587c5495cab0cf4cd1bbe109bdfb186df0a113804",
 }
 
 

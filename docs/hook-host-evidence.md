@@ -1,6 +1,6 @@
 # Desktop approval event contract
 
-Verified September 19, 2026 for bundled `codex-cli 0.155.0-alpha.9.2` (revalidated after an app update).
+Verified September 25, 2026 for bundled `codex-cli 0.155.0-alpha.16.4` (revalidated after an app update).
 The executable and Electron app bundle hashes are pinned in
 `src/vault_retrieval/hook_host.py`. This is a local workflow boundary, not
 cryptographic authentication against an unrestricted same-user process.
@@ -14,14 +14,14 @@ fields and no human-origin label. None is required by the new contract.
 The following links use the source release matching the installed binary,
 **not the moving main branch**:
 
-- [Hook input dispatch](https://github.com/openai/codex/blob/rust-v0.155.0-alpha.9.2/codex-rs/core/src/hook_runtime.rs):
+- [Hook input dispatch](https://github.com/openai/codex/blob/rust-v0.155.0-alpha.16.4/codex-rs/core/src/hook_runtime.rs):
   `inspect_pending_input` invokes UserPromptSubmit for `TurnInput::UserInput`.
   Response items, function outputs, and inter-agent communication bypass it.
-- [Subagent event serialization](https://github.com/openai/codex/blob/rust-v0.155.0-alpha.9.2/codex-rs/hooks/src/events/user_prompt_submit.rs):
+- [Subagent event serialization](https://github.com/openai/codex/blob/rust-v0.155.0-alpha.16.4/codex-rs/hooks/src/events/user_prompt_submit.rs):
   the host supplies `agent_id` and `agent_type` for child submissions. Root
   payloads omit them. The adapter rejects either field's presence, including
   malformed empty/null values; session matching alone is not the child guard.
-- [Stop-hook continuation](https://github.com/openai/codex/blob/rust-v0.155.0-alpha.9.2/codex-rs/core/src/session/turn.rs):
+- [Stop-hook continuation](https://github.com/openai/codex/blob/rust-v0.155.0-alpha.16.4/codex-rs/core/src/session/turn.rs):
   a blocking Stop hook builds a response item, records it directly, and continues
   the current turn. It does not resubmit it through `inspect_pending_input`.
   Therefore it cannot create a new approval event, even if its text is an exact
@@ -77,3 +77,20 @@ session/turn ID and ready/blocked status (no prompt text or approval). A fresh
 receipt distinguishes delivery from an assistant acknowledgment. Reload the app
 and repeat the real probe after this compatibility update; do not fake a probe
 receipt by manually invoking the production hook on synthetic events.
+
+## September 25 recovery
+
+Reviewed the installed 0.155.0-alpha.16.4 release's `hook_runtime.rs`,
+`hooks/src/events/user_prompt_submit.rs`, `hooks/src/schema.rs`, and
+`core/src/session/turn.rs`. UserInput dispatch, omitted root agent fields,
+subagent markers, and Stop continuation bypass remain as described above.
+Read-only ASAR inspection of `.vite/build/main-C-Mhak1n.js` confirmed that
+`Ms` constructs the heartbeat through `Sae`, and `Eae` submits that complete
+wrapper as text for scheduled and Run now triggers. The exact command matcher
+therefore still rejects automated instructions. Updated both fingerprints only
+after this review. Future unknown builds still fail closed.
+
+The local `--check` passes. This is source/build validation, not a new live human
+approval test. No production approval event or probe receipt was synthesized.
+Tokenizer data is now packaged and hash-checked so a cleared temporary cache
+cannot trigger an unbounded network download during CLI or hook startup.

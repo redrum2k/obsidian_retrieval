@@ -1,8 +1,7 @@
-import tiktoken
-
 from .common import VaultError, canonical, cursor_decode, cursor_encode, digest
+from .tokenizer import encoding
 
-ENCODING = tiktoken.get_encoding("cl100k_base")
+ENCODING = encoding()
 
 
 def measured(value):

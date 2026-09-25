@@ -99,13 +99,10 @@ uv run vault --config config.local.json search --query 'your topic'
 
 `intake --quiet` can intentionally print nothing when no host action is needed. It does not perform expensive extraction. `refresh` can extract eligible inputs, and `refresh --full` additionally reconciles content hashes; neither should replace discovery-only intake in a routine scheduled check.
 
-For offline use, populate the tokenizer cache while online:
-
-```sh
-uv run python -c 'import tiktoken; tiktoken.get_encoding("cl100k_base")'
-```
-
-The initial tokenizer download does not transmit vault contents. Retrieval itself is local; an external agent host may send retrieved evidence to its configured model.
+The pinned `cl100k_base` tokenizer data ships with the package and is hash-checked.
+CLI startup and retrieval do not download tokenizer data or depend on a temporary
+cache surviving between scheduled runs. Retrieval itself is local; an external
+agent host may send retrieved evidence to its configured model.
 
 ## Configuration
 
