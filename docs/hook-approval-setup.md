@@ -78,6 +78,12 @@ proposals under that configuration. Do not copy old approvals onto new proposals
   do not blindly replace fingerprints. Source/target changes require a new diff.
 - Approval recording does not itself finish application. If the agent turn stops,
   `apply-hook --id ID` can resume only the batch with an existing valid approval.
+- If a source is renamed after review, run `uv run vault --config config.local.json intake`.
+  Intake supersedes proposals whose recorded source path changed, even when the
+  document ID and content hash are unchanged, and releases their source reservations.
+  Register the corrected plan with `propose --plan PLAN.json`, deliver the new diff,
+  and review/approve its new ID. The old proposal remains in history; its approval
+  cannot authorize the replacement. No manual database edits are needed.
 - Do not manually feed fake events into the production hook or edit approval rows.
   These are local workflow controls, not an OS sandbox against arbitrary code
   with the same user's filesystem access.
@@ -105,3 +111,12 @@ requires the exact unformatted IMPLEMENT command; diagnostic normalization is
 never used to authorize a batch. The heartbeat prompt has been saved to the
 existing automation file with its schedule/target preserved; desktop UI reload
 must still be observed.
+
+## September 29 readiness repair
+
+The app update moved the CLI from `Resources/codex` into the `Resources/codex-cli`
+package. The old pinned path caused “Verified desktop installation is unavailable.”
+The reviewed 0.158.0-alpha.2.1 launcher, executable, and app bundle are now pinned;
+the local readiness check passes. See [review evidence](hook-host-evidence.md#september-29-bundle-layout-recovery).
+Future missing-file errors name the path, and unreviewed updates still block
+approval. The pending proposals and heartbeat schedule were not changed.

@@ -174,7 +174,8 @@ def test_hook_entrypoint_returns_apply_instruction_without_writes(hooked):
     assert "approval_recorded" not in instruction  # status is plain explanatory text
 
 
-def test_host_upgrade_blocks_recording_and_apply(hooked):
+@pytest.mark.parametrize("missing", [False, True])
+def test_host_upgrade_blocks_recording_and_apply(hooked, missing):
     from vault_retrieval.hook_host import HOST_FILES
 
     service, c, ident, event = hooked
@@ -182,10 +183,16 @@ def test_host_upgrade_blocks_recording_and_apply(hooked):
     receipt = recorded_receipt(service, ident)
     from pathlib import Path
 
-    Path(next(iter(HOST_FILES))).write_bytes(b"new unverified host")
-    with pytest.raises(VaultError, match="Desktop build changed"):
+    host = Path(next(iter(HOST_FILES)))
+    if missing:
+        host.unlink()
+    else:
+        host.write_bytes(b"new unverified host")
+    reason = "installation is unavailable" if missing else "Desktop build changed"
+    with pytest.raises(VaultError, match=reason) as failure:
         record_event(service, {**event, "turn_id": "turn-2"})
-    with pytest.raises(VaultError, match="Desktop build changed"):
+    assert str(host) in str(failure.value)
+    with pytest.raises(VaultError, match=reason):
         c.apply(ident, receipt)
     assert not (service.config.vault / "Study/Notes/Linear systems.md").exists()
 

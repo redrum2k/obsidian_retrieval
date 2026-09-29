@@ -92,7 +92,12 @@ class Coordinator:
                     doc = self.db.execute(
                         "SELECT * FROM documents WHERE id=? AND active=1", (source["id"],)
                     ).fetchone()
-                    if not doc or doc["hash"] != source["revision"]:
+                    # Renames retain identity/hash, but reviewed links bind the source path too.
+                    if (
+                        not doc
+                        or doc["hash"] != source["revision"]
+                        or doc["path"] != source["path"]
+                    ):
                         invalid = True
                 if invalid:
                     self.db.execute(

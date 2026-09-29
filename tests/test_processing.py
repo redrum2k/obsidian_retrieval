@@ -153,6 +153,42 @@ def test_changed_registry_supersedes_and_can_replan(env):
     )
 
 
+@pytest.mark.parametrize("via_intake", [False, True])
+def test_renamed_source_supersedes_and_releases_unchanged_revision(env, via_intake):
+    service, key, data = env
+    old_path = "Study/Raw/Capture.md"
+    new_path = "Study/Raw/Renamed capture.md"
+    data["user_note_paths"].append(new_path)
+    service.refresh()
+    c = Coordinator(service)
+    plan = plan_for(service)
+    old = c.propose(plan)["id"]
+    c.acknowledge(old)
+    receipt = receipt_for(service, key, old)
+    (service.config.vault / old_path).rename(service.config.vault / new_path)
+    if via_intake:
+        intake = c.run_intake()
+        assert intake["pending"][0]["document_id"] == plan["sources"][0]["id"]
+        assert intake["pending"][0]["revision"] == plan["sources"][0]["revision"]
+        assert intake["notifications"] == []
+        assert service.db.execute(
+            "SELECT proposal_id FROM work WHERE document_id=?",
+            (plan["sources"][0]["id"],),
+        ).fetchone()[0] is None
+    service.refresh()
+    plan["changes"][0]["content"] = plan["changes"][0]["content"].replace(old_path, new_path)
+    new = c.propose(plan)["id"]
+    assert new != old
+    assert service.db.execute(
+        "SELECT state FROM proposals WHERE id=?", (old,)
+    ).fetchone()[0] == "superseded"
+    with pytest.raises(VaultError, match="Proposal or configuration changed"):
+        c.apply(old, receipt)
+    assert not (service.config.vault / "Study/Notes/Linear systems.md").exists()
+    assert c.propose(plan)["id"] == new
+    assert c.run_intake()["notifications"][0]["proposal_id"] == new
+
+
 def test_faithful_raw_companion_recovers_and_is_not_intake(env):
     service, key, data = env
     data["companion_roots"] = ["Study/Raw"]

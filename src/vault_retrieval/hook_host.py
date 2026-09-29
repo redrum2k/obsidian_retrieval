@@ -7,8 +7,9 @@ from .common import VaultError
 
 HOST_CONTRACT = "codex-desktop-input-v1"
 HOST_FILES = {
-    "/Applications/ChatGPT.app/Contents/Resources/codex": "93169e745735930598e867ad837abf3fdc50774a3ad7e7aa89c0d0c51b0189a5",
-    "/Applications/ChatGPT.app/Contents/Resources/app.asar": "03108a728bdb1616958ab89587c5495cab0cf4cd1bbe109bdfb186df0a113804",
+    "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex": "50ab38ba21d0d9f8346f32f41848382f15b556190f3c7a07e885a4fb73e379c8",
+    "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex": "3e11ccc743e8198a5ef84fb57c89941d845b0ea0302485ed1fbac2f0821aca5a",
+    "/Applications/ChatGPT.app/Contents/Resources/app.asar": "d0ba973179d2f717affd39e012b64a095464a54a51c6bccb7bc6b3d2a1cfba80",
 }
 
 
@@ -23,11 +24,14 @@ def verify_host(settings):
                 actual = hashlib.file_digest(stream, "sha256").hexdigest()
         except OSError as exc:
             raise VaultError(
-                "unverified_host", "Verified desktop installation is unavailable."
+                "unverified_host",
+                f"Verified desktop installation is unavailable: {name} ({exc.strerror}). "
+                "The app may have moved or changed its bundle layout; review the installed "
+                "build and dispatch behavior before updating pinned paths or fingerprints.",
             ) from exc
         if actual != expected:
             raise VaultError(
                 "unverified_host",
-                "Desktop build changed; revalidate hook compatibility before approving or applying. "
+                f"Desktop build changed: {name}; revalidate hook compatibility before approving or applying. "
                 "Do not update fingerprints without reviewing the new dispatch behavior.",
             )
