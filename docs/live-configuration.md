@@ -67,3 +67,11 @@ vault policy. Review any policy changes before updating its pinned hash. Extend
 `input_rules` only if the new source paths/formats do not match existing rules.
 Validate configuration and classification before intake. Configuration changes
 invalidate unapplied proposals; request a fresh reviewed batch afterward.
+
+## Dokyun workflow exclusion — October 2, 2026
+
+The owner authorized excluding `Research/Dokyun/Workflow` from study intake.
+The live configuration and proposed configuration example exclude that entire
+subtree, including its backups, discovery drafts, state and helper scripts.
+Original files remain in place; the exclusion does not affect Dokyun Raw, Notes
+or Sources. The live configuration remains local and is not committed.
