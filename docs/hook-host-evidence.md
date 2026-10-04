@@ -1,6 +1,6 @@
 # Desktop approval event contract
 
-Verified September 29, 2026 for bundled `codex-cli 0.158.0-alpha.2.1` (revalidated after an app update).
+Verified October 4, 2026 for bundled `codex-cli 0.159.0-alpha.12.1` (revalidated after an app update).
 The executable and Electron app bundle hashes are pinned in
 `src/vault_retrieval/hook_host.py`. This is a local workflow boundary, not
 cryptographic authentication against an unrestricted same-user process.
@@ -14,14 +14,14 @@ fields and no human-origin label. None is required by the new contract.
 The following links use the source release matching the installed binary,
 **not the moving main branch**:
 
-- [Hook input dispatch](https://github.com/openai/codex/blob/rust-v0.158.0-alpha.2.1/codex-rs/core/src/hook_runtime.rs):
+- [Hook input dispatch](https://github.com/openai/codex/blob/rust-v0.159.0-alpha.12.1/codex-rs/core/src/hook_runtime.rs):
   `inspect_pending_input` invokes UserPromptSubmit for `TurnInput::UserInput`.
   Response items, function outputs, and inter-agent communication bypass it.
-- [Subagent event serialization](https://github.com/openai/codex/blob/rust-v0.158.0-alpha.2.1/codex-rs/hooks/src/events/user_prompt_submit.rs):
+- [Subagent event serialization](https://github.com/openai/codex/blob/rust-v0.159.0-alpha.12.1/codex-rs/hooks/src/events/user_prompt_submit.rs):
   the host supplies `agent_id` and `agent_type` for child submissions. Root
   payloads omit them. The adapter rejects either field's presence, including
   malformed empty/null values; session matching alone is not the child guard.
-- [Stop-hook continuation](https://github.com/openai/codex/blob/rust-v0.158.0-alpha.2.1/codex-rs/core/src/session/turn.rs):
+- [Stop-hook continuation](https://github.com/openai/codex/blob/rust-v0.159.0-alpha.12.1/codex-rs/core/src/session/turn.rs):
   a blocking Stop hook builds a response item, records it directly, and continues
   the current turn. It does not resubmit it through `inspect_pending_input`.
   Therefore it cannot create a new approval event, even if its text is an exact
@@ -34,7 +34,7 @@ approval matcher rejects that wrapper, even if its instructions contain an exact
 approval command. Unlike the prior build, this path can fire UserPromptSubmit;
 the approval adapter must not depend on the absence of a scheduled hook event.
 The earlier 0.154 build used tool-output submission. Both forms are covered by
-negative adapter fixtures; the currently pinned files are the reviewed 0.158 build.
+negative adapter fixtures; the currently pinned files are the reviewed 0.159 build.
 
 The earlier documentation overstated the uncertainty: generic docs describe a
 Stop continuation as a user prompt, but the matching runtime implementation
@@ -116,3 +116,24 @@ mismatches now identify the affected path. Regression coverage checks that both
 missing and modified host files block recording and application. The production
 readiness check passes; this does not establish live hook delivery or UI trust.
 No proposal approval, application, or synthetic production probe was performed.
+
+## October 4 compatibility revalidation
+
+Reproduced the executable fingerprint failure after the installed CLI updated to
+`0.159.0-alpha.12.1`. Reviewed that exact release's `core/src/hook_runtime.rs`,
+`hooks/src/events/user_prompt_submit.rs`, `hooks/src/schema.rs`, and
+`core/src/session/turn.rs`. UserInput dispatch, child-agent markers, omitted root
+agent fields, and direct response-item recording for Stop continuation retain
+the approval contract described above.
+
+Read-only extraction of `.vite/build/main-C3nRcJ3D.js` from the installed ASAR
+confirmed the `il` heartbeat template retains its complete outer wrapper. `ql`
+substitutes the automation ID, timestamp, and instructions; the shared `Ul` heartbeat
+submission passes that complete result to `$l`, which starts a text-input turn.
+Both scheduled and Run now heartbeat paths use that shared submission. Thus an
+embedded IMPLEMENT instruction still cannot match the exact whole-message command.
+
+Updated the executable and ASAR fingerprints after this review; the launcher
+fingerprint is unchanged. The local readiness check and all 87 regression tests pass.
+This is source/build validation, not a new live hook delivery or human approval
+test. No production approval, application, or synthetic probe was performed.

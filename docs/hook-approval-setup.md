@@ -120,3 +120,12 @@ The reviewed 0.158.0-alpha.2.1 launcher, executable, and app bundle are now pinn
 the local readiness check passes. See [review evidence](hook-host-evidence.md#september-29-bundle-layout-recovery).
 Future missing-file errors name the path, and unreviewed updates still block
 approval. The pending proposals and heartbeat schedule were not changed.
+
+## October 4 readiness repair
+
+Revalidated installed CLI `0.159.0-alpha.12.1` and the updated desktop heartbeat
+submission against the existing approval contract. Updated the executable and
+app bundle fingerprints; the local readiness check passes. See
+[review evidence](hook-host-evidence.md#october-4-compatibility-revalidation).
+The RN103 proposal remains pending; this repair does not approve or apply it.
+Future unreviewed desktop builds still block approval and application.
