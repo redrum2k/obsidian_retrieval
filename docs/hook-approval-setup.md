@@ -129,3 +129,19 @@ app bundle fingerprints; the local readiness check passes. See
 [review evidence](hook-host-evidence.md#october-4-compatibility-revalidation).
 The RN103 proposal remains pending; this repair does not approve or apply it.
 Future unreviewed desktop builds still block approval and application.
+
+## October 5 policy review
+
+Resolved `policy_changed` after reviewing the new Dokyun analysis-location rule.
+Removing that appended section reproduces the previously pinned SHA-256 exactly;
+the remaining policy is unchanged. Developer/Dokyun is outside the vault, and
+`Research/Dokyun/Workflow` is already excluded, so no retrieval scope changes were
+needed. Updated only the policy fingerprint in the local configuration to
+`2cfa9706355dc4d70c2c0c20122d85c96df972acbc46a2492575dbf6e1a031c0`.
+
+Saved the prior configuration and reviewed policy under
+`setup-backups/20261005-policy-review` in the retrieval state directory.
+The local hook readiness check and `vault health` pass. No intake or note
+application was run; approval settings and the recurring schedule were unchanged.
+The next intake reconciles the changed configuration; proposals tied to the old
+configuration must be regenerated and reviewed before application.
